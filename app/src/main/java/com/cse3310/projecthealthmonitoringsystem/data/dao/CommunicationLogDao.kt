@@ -28,6 +28,10 @@ abstract class CommunicationLogDao {
     @Query("SELECT EXISTS(SELECT 1 FROM CommunicationLog WHERE commId = :commId AND userId = :userId)")
     abstract suspend fun logOwned(userId: String, commId: Long): Boolean
 
+    /** Checks that an alert referenced by a log row belongs to the same user. */
+    @Query("SELECT EXISTS(SELECT 1 FROM Alert WHERE alertId = :alertId AND userId = :userId)")
+    abstract suspend fun alertOwned(userId: String, alertId: Long): Boolean
+
     @Query("SELECT * FROM CommunicationLog WHERE userId = :userId ORDER BY sentAt DESC")
     abstract fun observeLogs(userId: String): Flow<List<CommunicationLog>>
 

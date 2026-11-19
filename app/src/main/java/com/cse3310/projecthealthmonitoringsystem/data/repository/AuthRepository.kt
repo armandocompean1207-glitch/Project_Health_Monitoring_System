@@ -75,9 +75,27 @@ class AuthRepository(
     suspend fun updatePassword(userId: String, passwordHash: String, passwordSalt: String): Boolean =
         userDao.updatePassword(userId, passwordHash, passwordSalt) > 0
 
-    /** Updates account fields such as email. The row is keyed by [userId], so callers can only change their own. */
-    suspend fun updateUser(userId: String, user: User): Boolean =
-        user.userId == userId && userDao.updateUser(user) > 0
+    /**
+     * Updates account fields such as email and security question. The password hash and salt and the
+     * lockout counters are kept from the stored row, so this cannot be used to change the password
+     * (use [updatePassword]) or to clear a lockout. Returns false for another user's row or a taken email.
+     */
+    suspend fun updateUser(userId: String, user: User): Boolean = tx.run {
+        if (user.userId != userId) return@run false
+        val stored = userDao.getUser(userId) ?: return@run false
+        val safe = user.copy(
+            passwordHash = stored.passwordHash,
+            passwordSalt = stored.passwordSalt,
+            failedLoginAttempts = stored.failedLoginAttempts,
+            lockedUntil = stored.lockedUntil,
+            createdAt = stored.createdAt
+        )
+        try {
+            userDao.updateUser(safe) > 0
+        } catch (e: SQLiteConstraintException) {
+            false
+        }
+    }
 
     suspend fun getProfile(userId: String): Profile? = userDao.getProfile(userId)
 

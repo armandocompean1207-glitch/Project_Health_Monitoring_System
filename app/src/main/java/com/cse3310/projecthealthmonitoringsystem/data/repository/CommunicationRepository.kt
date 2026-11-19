@@ -42,7 +42,10 @@ class CommunicationRepository(
 
     // ---- Delivery log ----
 
-    /** Records one delivery attempt. Returns the new commId. */
+    /**
+     * Records one delivery attempt. Returns the new commId, or null if [alertId] or [designeeId]
+     * belongs to another user.
+     */
     suspend fun logCommunication(
         userId: String,
         alertId: Long?,
@@ -51,6 +54,20 @@ class CommunicationRepository(
         status: DeliveryStatus,
         detail: String = "",
         attempt: Int = 1
+    ): Long? {
+        if (alertId != null && !communicationLogDao.alertOwned(userId, alertId)) return null
+        if (designeeId != null && !designeeDao.designeeOwned(userId, designeeId)) return null
+        return insertLog(userId, alertId, designeeId, method, status, detail, attempt)
+    }
+
+    private suspend fun insertLog(
+        userId: String,
+        alertId: Long?,
+        designeeId: Long?,
+        method: ContactMethod,
+        status: DeliveryStatus,
+        detail: String,
+        attempt: Int
     ): Long = communicationLogDao.insertLog(
         CommunicationLog(
             userId = userId,
