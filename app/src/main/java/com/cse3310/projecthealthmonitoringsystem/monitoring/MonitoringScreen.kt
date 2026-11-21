@@ -16,14 +16,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,17 +34,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.cse3310.projecthealthmonitoringsystem.data.entity.Alert
 import com.cse3310.projecthealthmonitoringsystem.data.entity.CommunicationLog
-import com.cse3310.projecthealthmonitoringsystem.data.entity.ContactMethod
-import com.cse3310.projecthealthmonitoringsystem.data.entity.Designee
 import com.cse3310.projecthealthmonitoringsystem.data.repository.MonitoringRepository
 import kotlinx.coroutines.launch
 
 @Composable
-fun MonitoringScreen(onBack: () -> Unit) {
+fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}) {
     val context = LocalContext.current
     val app = context.phms()
     val userId = CurrentUser.userId
@@ -57,17 +52,13 @@ fun MonitoringScreen(onBack: () -> Unit) {
     val designees by remember { app.communicationRepository.observeDesignees(userId) }.collectAsState(initial = emptyList())
     val medications by remember { app.medicationRepository.observeActiveMedications(userId) }.collectAsState(initial = emptyList())
 
+    var permissionsOk by remember { mutableStateOf(AlertSender.canNotify(context) && AlertSender.canSendSms(context)) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { }
+    ) { permissionsOk = AlertSender.canNotify(context) && AlertSender.canSendSms(context) }
 
     var viewing by remember { mutableStateOf<Alert?>(null) }
     var viewingLog by remember { mutableStateOf<List<CommunicationLog>>(emptyList()) }
-
-    var dName by remember { mutableStateOf("") }
-    var dRelationship by remember { mutableStateOf("") }
-    var dPhone by remember { mutableStateOf("") }
-    var dEmail by remember { mutableStateOf("") }
 
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
@@ -85,7 +76,7 @@ fun MonitoringScreen(onBack: () -> Unit) {
         }
 
         item {
-            if (!AlertSender.canNotify(context) || !AlertSender.canSendSms(context)) {
+            if (!permissionsOk) {
                 SectionCard("Turn on alerts") {
                     Text("Allow notifications and SMS so PHMS can alert you and your designees.")
                     Button(onClick = {
@@ -103,7 +94,7 @@ fun MonitoringScreen(onBack: () -> Unit) {
         if (alerts.isEmpty()) {
             item { Text("No alerts yet.") }
         }
-        items(alerts, key = { it.alertId }) { alert ->
+        items(alerts, key = { "alert-${it.alertId}" }) { alert ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -133,7 +124,7 @@ fun MonitoringScreen(onBack: () -> Unit) {
         }
 
         item { Text("Designees", style = MaterialTheme.typography.titleLarge) }
-        items(designees, key = { it.designeeId }) { d ->
+        items(designees, key = { "designee-${it.designeeId}" }) { d ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("${d.name} (${d.relationship.ifBlank { "designee" }})", style = MaterialTheme.typography.titleMedium)
@@ -157,37 +148,8 @@ fun MonitoringScreen(onBack: () -> Unit) {
             }
         }
         item {
-            SectionCard("Add a designee") {
-                OutlinedTextField(dName, { dName = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(dRelationship, { dRelationship = it }, label = { Text("Relationship (son, doctor, pharmacist…)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(
-                    dPhone, { dPhone = it }, label = { Text("Phone") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    dEmail, { dEmail = it }, label = { Text("Email") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Button(
-                    enabled = dName.isNotBlank() && (dPhone.isNotBlank() || dEmail.isNotBlank()),
-                    onClick = {
-                        val designee = Designee(
-                            userId = userId,
-                            name = dName.trim(),
-                            relationship = dRelationship.trim(),
-                            phone = dPhone.trim(),
-                            email = dEmail.trim(),
-                            preferredMethod = if (dPhone.isNotBlank()) ContactMethod.SMS else ContactMethod.EMAIL
-                        )
-                        scope.launch {
-                            app.communicationRepository.addDesignee(userId, designee)
-                            dName = ""; dRelationship = ""; dPhone = ""; dEmail = ""
-                        }
-                    }
-                ) { Text("Add designee") }
-            }
+            if (designees.isEmpty()) Text("No designees yet.")
+            OutlinedButton(onClick = onOpenCommunication) { Text("Add or edit designees") }
         }
 
         if (medications.isNotEmpty()) {
