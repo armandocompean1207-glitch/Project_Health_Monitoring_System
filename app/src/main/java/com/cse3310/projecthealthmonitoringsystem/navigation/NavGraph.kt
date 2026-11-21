@@ -20,6 +20,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.cse3310.projecthealthmonitoringsystem.medication.MedicationScreen
+import com.cse3310.projecthealthmonitoringsystem.monitoring.MonitoringScreen
+import com.cse3310.projecthealthmonitoringsystem.search.SearchScreen
 
 object AppRoutes {
     const val HOME = "home"
@@ -74,10 +77,7 @@ fun AppNavGraph(
         }
 
         composable(AppRoutes.MEDICATION) {
-            PlaceholderScreen(
-                title = "Medication",
-                description = "Your medications and reminders will appear here."
-            )
+            MedicationScreen()
         }
 
         composable(AppRoutes.HEALTH) {
@@ -109,19 +109,11 @@ fun AppNavGraph(
         }
 
         composable(AppRoutes.MONITORING) {
-            PlaceholderScreen(
-                title = "Monitoring",
-                description = "Alerts and monitoring details will appear here.",
-                onBack = { navController.popBackStack() }
-            )
+            MonitoringScreen(onBack = { navController.popBackStack() })
         }
 
         composable(AppRoutes.SEARCH) {
-            PlaceholderScreen(
-                title = "Search",
-                description = "Search results will appear here.",
-                onBack = { navController.popBackStack() }
-            )
+            SearchScreen(onBack = { navController.popBackStack() })
         }
 
         composable(AppRoutes.DATA_MAINTENANCE) {
