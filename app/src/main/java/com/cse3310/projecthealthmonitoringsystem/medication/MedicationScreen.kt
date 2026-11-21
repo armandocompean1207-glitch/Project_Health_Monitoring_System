@@ -231,7 +231,7 @@ fun MedicationScreen() {
         if (todayDoses.isEmpty()) {
             item { Text("No doses yet today. A dose appears here when its reminder goes off.") }
         }
-        items(todayDoses, key = { it.dose.doseId }) { row ->
+        items(todayDoses, key = { "dose-${it.dose.doseId}" }) { row ->
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -257,7 +257,7 @@ fun MedicationScreen() {
         if (medications.isEmpty()) {
             item { Text("No medications yet.") }
         }
-        items(medications, key = { it.medicationId }) { med ->
+        items(medications, key = { "med-${it.medicationId}" }) { med ->
             val doctorName = doctors.firstOrNull { it.doctor.doctorId == med.doctorId }?.doctor?.name
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
