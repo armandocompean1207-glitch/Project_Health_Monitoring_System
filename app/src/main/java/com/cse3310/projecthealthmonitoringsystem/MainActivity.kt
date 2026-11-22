@@ -24,9 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.cse3310.projecthealthmonitoringsystem.navigation.AppNavGraph
-import com.cse3310.projecthealthmonitoringsystem.navigation.AppRoutes
-import com.cse3310.projecthealthmonitoringsystem.navigation.TopLevelDestination
+import pushtest.navigation.AppNavGraph
+import pushtest.navigation.AppRoutes
+import pushtest.navigation.TopLevelDestination
 import com.cse3310.projecthealthmonitoringsystem.ui.theme.ProjectHealthMonitoringSystemTheme
 
 class MainActivity : ComponentActivity() {

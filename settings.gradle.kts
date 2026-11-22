@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Project Health Monitoring System"
 include(":app")
+include(":app:storage")
