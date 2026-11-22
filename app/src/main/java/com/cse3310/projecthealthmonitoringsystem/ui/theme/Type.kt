@@ -4,49 +4,39 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontVariation
+import com.cse3310.projecthealthmonitoringsystem.R
 import androidx.compose.ui.unit.sp
 
-// Set of Material typography styles to start with
+// Bundled official variable fonts: no provider, network, or silent download fallback.
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+private fun family(resource: Int) = FontFamily(
+    listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold, FontWeight.ExtraBold).map {
+        Font(resource, weight = it, variationSettings = FontVariation.Settings(FontVariation.weight(it.weight)))
+    }
+)
+private val headings = family(R.font.plus_jakarta_sans)
+private val body = family(R.font.inter)
+private fun heading(weight: FontWeight, size: Int, line: Int) =
+    TextStyle(fontFamily = headings, fontWeight = weight, fontSize = size.sp, lineHeight = line.sp)
+private fun prose(size: Int, line: Int) =
+    TextStyle(fontFamily = body, fontWeight = FontWeight.Normal, fontSize = size.sp, lineHeight = line.sp)
+
 val Typography = Typography(
-    headlineMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 28.sp,
-        lineHeight = 34.sp
-    ),
-    titleMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 16.sp,
-        lineHeight = 24.sp
-    ),
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.15.sp
-    ),
-    labelMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 16.sp
-    )
-    /* Other default text styles to override
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
-    */
+    displayLarge = heading(FontWeight.Bold, 36, 44),
+    displayMedium = heading(FontWeight.Bold, 32, 40),
+    displaySmall = heading(FontWeight.Bold, 28, 36),
+    headlineLarge = heading(FontWeight.ExtraBold, 28, 35),
+    headlineMedium = heading(FontWeight.Bold, 24, 32),
+    headlineSmall = heading(FontWeight.SemiBold, 22, 30),
+    titleLarge = heading(FontWeight.Bold, 18, 26),
+    titleMedium = heading(FontWeight.Bold, 16, 24),
+    titleSmall = heading(FontWeight.SemiBold, 14, 20),
+    bodyLarge = prose(16, 24),
+    bodyMedium = prose(14, 21),
+    bodySmall = prose(12, 18),
+    labelLarge = heading(FontWeight.Bold, 14, 20),
+    labelMedium = heading(FontWeight.SemiBold, 12, 17),
+    labelSmall = heading(FontWeight.SemiBold, 11, 16)
 )

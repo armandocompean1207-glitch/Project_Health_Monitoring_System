@@ -1,0 +1,1618 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "df82b4cc793ba17e50c4f8faa30bae2d",
+    "entities": [
+      {
+        "tableName": "User",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` TEXT NOT NULL, `email` TEXT NOT NULL COLLATE NOCASE, `passwordHash` TEXT NOT NULL, `passwordSalt` TEXT NOT NULL, `securityQuestion` TEXT NOT NULL, `securityAnswerHash` TEXT NOT NULL, `securityAnswerSalt` TEXT NOT NULL, `failedLoginAttempts` INTEGER NOT NULL, `lockedUntil` INTEGER, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`userId`))",
+        "fields": [
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "email",
+            "columnName": "email",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "passwordHash",
+            "columnName": "passwordHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "passwordSalt",
+            "columnName": "passwordSalt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "securityQuestion",
+            "columnName": "securityQuestion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "securityAnswerHash",
+            "columnName": "securityAnswerHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "securityAnswerSalt",
+            "columnName": "securityAnswerSalt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "failedLoginAttempts",
+            "columnName": "failedLoginAttempts",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lockedUntil",
+            "columnName": "lockedUntil",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_User_email",
+            "unique": true,
+            "columnNames": [
+              "email"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_User_email` ON `${TABLE_NAME}` (`email`)"
+          }
+        ]
+      },
+      {
+        "tableName": "Profile",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` TEXT NOT NULL, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `gender` TEXT NOT NULL, `age` INTEGER NOT NULL, `weight` REAL NOT NULL, `weightUnit` TEXT NOT NULL, `heightCm` REAL NOT NULL, `annualCheckupAt` INTEGER, PRIMARY KEY(`userId`), FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "phone",
+            "columnName": "phone",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gender",
+            "columnName": "gender",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "age",
+            "columnName": "age",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "weight",
+            "columnName": "weight",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "weightUnit",
+            "columnName": "weightUnit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "heightCm",
+            "columnName": "heightCm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "annualCheckupAt",
+            "columnName": "annualCheckupAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "Specialty",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`specialtyId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "specialtyId",
+            "columnName": "specialtyId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "specialtyId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Specialty_name",
+            "unique": true,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_Specialty_name` ON `${TABLE_NAME}` (`name`)"
+          }
+        ]
+      },
+      {
+        "tableName": "Doctor",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`doctorId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `name` TEXT NOT NULL, `specialtyId` INTEGER, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `address` TEXT NOT NULL, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`specialtyId`) REFERENCES `Specialty`(`specialtyId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "doctorId",
+            "columnName": "doctorId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "specialtyId",
+            "columnName": "specialtyId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "phone",
+            "columnName": "phone",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "email",
+            "columnName": "email",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "address",
+            "columnName": "address",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "doctorId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Doctor_userId",
+            "unique": false,
+            "columnNames": [
+              "userId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Doctor_userId` ON `${TABLE_NAME}` (`userId`)"
+          },
+          {
+            "name": "index_Doctor_specialtyId",
+            "unique": false,
+            "columnNames": [
+              "specialtyId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Doctor_specialtyId` ON `${TABLE_NAME}` (`specialtyId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          },
+          {
+            "table": "Specialty",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "specialtyId"
+            ],
+            "referencedColumns": [
+              "specialtyId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "DoctorVisit",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`visitId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `doctorId` INTEGER NOT NULL, `visitAt` INTEGER NOT NULL, `reason` TEXT NOT NULL, `notes` TEXT NOT NULL, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`doctorId`) REFERENCES `Doctor`(`doctorId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "visitId",
+            "columnName": "visitId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "doctorId",
+            "columnName": "doctorId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "visitAt",
+            "columnName": "visitAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "visitId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_DoctorVisit_userId_visitAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "visitAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_DoctorVisit_userId_visitAt` ON `${TABLE_NAME}` (`userId`, `visitAt`)"
+          },
+          {
+            "name": "index_DoctorVisit_doctorId",
+            "unique": false,
+            "columnNames": [
+              "doctorId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_DoctorVisit_doctorId` ON `${TABLE_NAME}` (`doctorId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          },
+          {
+            "table": "Doctor",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "doctorId"
+            ],
+            "referencedColumns": [
+              "doctorId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "Medication",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`medicationId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `name` TEXT NOT NULL, `dosage` TEXT NOT NULL, `frequency` TEXT NOT NULL, `intakeTimeMinutes` INTEGER NOT NULL, `startDate` INTEGER NOT NULL, `endDate` INTEGER, `doctorId` INTEGER, `instructions` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`doctorId`) REFERENCES `Doctor`(`doctorId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "medicationId",
+            "columnName": "medicationId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dosage",
+            "columnName": "dosage",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frequency",
+            "columnName": "frequency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "intakeTimeMinutes",
+            "columnName": "intakeTimeMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startDate",
+            "columnName": "startDate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endDate",
+            "columnName": "endDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "doctorId",
+            "columnName": "doctorId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "instructions",
+            "columnName": "instructions",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "isActive",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "medicationId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Medication_userId_isActive",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "isActive"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Medication_userId_isActive` ON `${TABLE_NAME}` (`userId`, `isActive`)"
+          },
+          {
+            "name": "index_Medication_doctorId",
+            "unique": false,
+            "columnNames": [
+              "doctorId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Medication_doctorId` ON `${TABLE_NAME}` (`doctorId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          },
+          {
+            "table": "Doctor",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "doctorId"
+            ],
+            "referencedColumns": [
+              "doctorId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "DoseLog",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`doseId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `medicationId` INTEGER NOT NULL, `scheduledAt` INTEGER NOT NULL, `status` TEXT NOT NULL, `recordedAt` INTEGER, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`medicationId`) REFERENCES `Medication`(`medicationId`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "doseId",
+            "columnName": "doseId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "medicationId",
+            "columnName": "medicationId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scheduledAt",
+            "columnName": "scheduledAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordedAt",
+            "columnName": "recordedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "doseId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_DoseLog_medicationId_scheduledAt",
+            "unique": true,
+            "columnNames": [
+              "medicationId",
+              "scheduledAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_DoseLog_medicationId_scheduledAt` ON `${TABLE_NAME}` (`medicationId`, `scheduledAt`)"
+          },
+          {
+            "name": "index_DoseLog_userId_status_scheduledAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "status",
+              "scheduledAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_DoseLog_userId_status_scheduledAt` ON `${TABLE_NAME}` (`userId`, `status`, `scheduledAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          },
+          {
+            "table": "Medication",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "medicationId"
+            ],
+            "referencedColumns": [
+              "medicationId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "AuditLog",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`auditId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `medicationId` INTEGER NOT NULL, `field` TEXT NOT NULL, `oldValue` TEXT, `newValue` TEXT, `changedAt` INTEGER NOT NULL, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`medicationId`) REFERENCES `Medication`(`medicationId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "auditId",
+            "columnName": "auditId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "medicationId",
+            "columnName": "medicationId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "field",
+            "columnName": "field",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oldValue",
+            "columnName": "oldValue",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "newValue",
+            "columnName": "newValue",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "changedAt",
+            "columnName": "changedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "auditId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_AuditLog_userId",
+            "unique": false,
+            "columnNames": [
+              "userId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_AuditLog_userId` ON `${TABLE_NAME}` (`userId`)"
+          },
+          {
+            "name": "index_AuditLog_medicationId_changedAt",
+            "unique": false,
+            "columnNames": [
+              "medicationId",
+              "changedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_AuditLog_medicationId_changedAt` ON `${TABLE_NAME}` (`medicationId`, `changedAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          },
+          {
+            "table": "Medication",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "medicationId"
+            ],
+            "referencedColumns": [
+              "medicationId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "VitalType",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`vitalTypeId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `unit` TEXT NOT NULL, `normalMin` REAL NOT NULL, `normalMax` REAL NOT NULL, `secondaryLabel` TEXT, `secondaryMin` REAL, `secondaryMax` REAL)",
+        "fields": [
+          {
+            "fieldPath": "vitalTypeId",
+            "columnName": "vitalTypeId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unit",
+            "columnName": "unit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalMin",
+            "columnName": "normalMin",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalMax",
+            "columnName": "normalMax",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "secondaryLabel",
+            "columnName": "secondaryLabel",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "secondaryMin",
+            "columnName": "secondaryMin",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "secondaryMax",
+            "columnName": "secondaryMax",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "vitalTypeId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_VitalType_name",
+            "unique": true,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_VitalType_name` ON `${TABLE_NAME}` (`name`)"
+          }
+        ]
+      },
+      {
+        "tableName": "VitalSign",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`vitalId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `vitalTypeId` INTEGER NOT NULL, `value` REAL NOT NULL, `secondaryValue` REAL, `recordedAt` INTEGER NOT NULL, `isAbnormal` INTEGER NOT NULL, `note` TEXT NOT NULL, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`vitalTypeId`) REFERENCES `VitalType`(`vitalTypeId`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "vitalId",
+            "columnName": "vitalId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vitalTypeId",
+            "columnName": "vitalTypeId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "secondaryValue",
+            "columnName": "secondaryValue",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "recordedAt",
+            "columnName": "recordedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isAbnormal",
+            "columnName": "isAbnormal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "vitalId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_VitalSign_userId_vitalTypeId_recordedAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "vitalTypeId",
+              "recordedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_VitalSign_userId_vitalTypeId_recordedAt` ON `${TABLE_NAME}` (`userId`, `vitalTypeId`, `recordedAt`)"
+          },
+          {
+            "name": "index_VitalSign_vitalTypeId",
+            "unique": false,
+            "columnNames": [
+              "vitalTypeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_VitalSign_vitalTypeId` ON `${TABLE_NAME}` (`vitalTypeId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          },
+          {
+            "table": "VitalType",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "vitalTypeId"
+            ],
+            "referencedColumns": [
+              "vitalTypeId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "DietEntry",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`dietEntryId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `mealType` TEXT NOT NULL, `eatenAt` INTEGER NOT NULL, `notes` TEXT NOT NULL, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "dietEntryId",
+            "columnName": "dietEntryId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mealType",
+            "columnName": "mealType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eatenAt",
+            "columnName": "eatenAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "dietEntryId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_DietEntry_userId_eatenAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "eatenAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_DietEntry_userId_eatenAt` ON `${TABLE_NAME}` (`userId`, `eatenAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "Food",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`foodId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `dietEntryId` INTEGER NOT NULL, `name` TEXT NOT NULL, `calories` INTEGER NOT NULL, `proteinGrams` REAL NOT NULL, `sugarGrams` REAL NOT NULL, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`dietEntryId`) REFERENCES `DietEntry`(`dietEntryId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "foodId",
+            "columnName": "foodId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dietEntryId",
+            "columnName": "dietEntryId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calories",
+            "columnName": "calories",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "proteinGrams",
+            "columnName": "proteinGrams",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sugarGrams",
+            "columnName": "sugarGrams",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "foodId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Food_userId",
+            "unique": false,
+            "columnNames": [
+              "userId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Food_userId` ON `${TABLE_NAME}` (`userId`)"
+          },
+          {
+            "name": "index_Food_dietEntryId",
+            "unique": false,
+            "columnNames": [
+              "dietEntryId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Food_dietEntryId` ON `${TABLE_NAME}` (`dietEntryId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          },
+          {
+            "table": "DietEntry",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "dietEntryId"
+            ],
+            "referencedColumns": [
+              "dietEntryId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "Weight",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`weightId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `value` REAL NOT NULL, `unit` TEXT NOT NULL, `recordedAt` INTEGER NOT NULL, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "weightId",
+            "columnName": "weightId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unit",
+            "columnName": "unit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordedAt",
+            "columnName": "recordedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "weightId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Weight_userId_recordedAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "recordedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Weight_userId_recordedAt` ON `${TABLE_NAME}` (`userId`, `recordedAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "Note",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`noteId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `title` TEXT NOT NULL, `body` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `editedAt` INTEGER NOT NULL, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "noteId",
+            "columnName": "noteId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "body",
+            "columnName": "body",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "editedAt",
+            "columnName": "editedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "noteId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Note_userId_editedAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "editedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Note_userId_editedAt` ON `${TABLE_NAME}` (`userId`, `editedAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "Designee",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`designeeId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `name` TEXT NOT NULL, `relationship` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `preferredMethod` TEXT NOT NULL, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "designeeId",
+            "columnName": "designeeId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relationship",
+            "columnName": "relationship",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "phone",
+            "columnName": "phone",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "email",
+            "columnName": "email",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "preferredMethod",
+            "columnName": "preferredMethod",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "designeeId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Designee_userId",
+            "unique": false,
+            "columnNames": [
+              "userId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Designee_userId` ON `${TABLE_NAME}` (`userId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "Alert",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`alertId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `type` TEXT NOT NULL, `message` TEXT NOT NULL, `doseId` INTEGER, `medicationId` INTEGER, `vitalId` INTEGER, `createdAt` INTEGER NOT NULL, `acknowledgedAt` INTEGER, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`doseId`) REFERENCES `DoseLog`(`doseId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`medicationId`) REFERENCES `Medication`(`medicationId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`vitalId`) REFERENCES `VitalSign`(`vitalId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "alertId",
+            "columnName": "alertId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "message",
+            "columnName": "message",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "doseId",
+            "columnName": "doseId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "medicationId",
+            "columnName": "medicationId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "vitalId",
+            "columnName": "vitalId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "acknowledgedAt",
+            "columnName": "acknowledgedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "alertId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Alert_userId_acknowledgedAt_createdAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "acknowledgedAt",
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Alert_userId_acknowledgedAt_createdAt` ON `${TABLE_NAME}` (`userId`, `acknowledgedAt`, `createdAt`)"
+          },
+          {
+            "name": "index_Alert_doseId",
+            "unique": true,
+            "columnNames": [
+              "doseId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_Alert_doseId` ON `${TABLE_NAME}` (`doseId`)"
+          },
+          {
+            "name": "index_Alert_medicationId",
+            "unique": false,
+            "columnNames": [
+              "medicationId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Alert_medicationId` ON `${TABLE_NAME}` (`medicationId`)"
+          },
+          {
+            "name": "index_Alert_vitalId",
+            "unique": false,
+            "columnNames": [
+              "vitalId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_Alert_vitalId` ON `${TABLE_NAME}` (`vitalId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          },
+          {
+            "table": "DoseLog",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "doseId"
+            ],
+            "referencedColumns": [
+              "doseId"
+            ]
+          },
+          {
+            "table": "Medication",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "medicationId"
+            ],
+            "referencedColumns": [
+              "medicationId"
+            ]
+          },
+          {
+            "table": "VitalSign",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "vitalId"
+            ],
+            "referencedColumns": [
+              "vitalId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "CommunicationLog",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`commId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` TEXT NOT NULL, `alertId` INTEGER, `designeeId` INTEGER, `method` TEXT NOT NULL, `status` TEXT NOT NULL, `attempt` INTEGER NOT NULL, `detail` TEXT NOT NULL, `sentAt` INTEGER NOT NULL, FOREIGN KEY(`userId`) REFERENCES `User`(`userId`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`alertId`) REFERENCES `Alert`(`alertId`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`designeeId`) REFERENCES `Designee`(`designeeId`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "commId",
+            "columnName": "commId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "alertId",
+            "columnName": "alertId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "designeeId",
+            "columnName": "designeeId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "method",
+            "columnName": "method",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attempt",
+            "columnName": "attempt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "detail",
+            "columnName": "detail",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sentAt",
+            "columnName": "sentAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "commId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_CommunicationLog_userId_sentAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "sentAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_CommunicationLog_userId_sentAt` ON `${TABLE_NAME}` (`userId`, `sentAt`)"
+          },
+          {
+            "name": "index_CommunicationLog_alertId",
+            "unique": false,
+            "columnNames": [
+              "alertId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_CommunicationLog_alertId` ON `${TABLE_NAME}` (`alertId`)"
+          },
+          {
+            "name": "index_CommunicationLog_designeeId",
+            "unique": false,
+            "columnNames": [
+              "designeeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_CommunicationLog_designeeId` ON `${TABLE_NAME}` (`designeeId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "User",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId"
+            ],
+            "referencedColumns": [
+              "userId"
+            ]
+          },
+          {
+            "table": "Alert",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "alertId"
+            ],
+            "referencedColumns": [
+              "alertId"
+            ]
+          },
+          {
+            "table": "Designee",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "designeeId"
+            ],
+            "referencedColumns": [
+              "designeeId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "ConflictRule",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ruleId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `drugA` TEXT NOT NULL, `drugB` TEXT NOT NULL, `severity` TEXT NOT NULL, `description` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "ruleId",
+            "columnName": "ruleId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "drugA",
+            "columnName": "drugA",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "drugB",
+            "columnName": "drugB",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "severity",
+            "columnName": "severity",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "ruleId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_ConflictRule_drugA_drugB",
+            "unique": true,
+            "columnNames": [
+              "drugA",
+              "drugB"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_ConflictRule_drugA_drugB` ON `${TABLE_NAME}` (`drugA`, `drugB`)"
+          },
+          {
+            "name": "index_ConflictRule_drugB",
+            "unique": false,
+            "columnNames": [
+              "drugB"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_ConflictRule_drugB` ON `${TABLE_NAME}` (`drugB`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'df82b4cc793ba17e50c4f8faa30bae2d')"
+    ]
+  }
+}
