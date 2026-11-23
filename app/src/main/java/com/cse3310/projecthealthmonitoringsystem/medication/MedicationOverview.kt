@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -53,6 +54,8 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
     val app = context.phms()
     val userId = CurrentUser.userId
     val scope = rememberCoroutineScope()
+    val providers by remember(userId) { app.maintenanceRepository.observeDoctors(userId) }.collectAsState(emptyList())
+    val pharmacies by remember(userId) { app.maintenanceRepository.observePharmacies(userId) }.collectAsState(emptyList())
     val all by remember(userId) { app.medicationRepository.observeAllMedications(userId) }.collectAsState(emptyList())
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var historyDay by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
@@ -60,6 +63,9 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var entry by remember(userId) { mutableStateOf<DoseEntry?>(null) }
+    var entryHistory by remember { mutableStateOf<List<DoseCorrection>?>(null) }
+    var originalEntry by remember { mutableStateOf<DoseLog?>(null) }
     LaunchedEffect(userId) {
         while (true) {
             now = System.currentTimeMillis()
@@ -77,6 +83,19 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
     }
     val range = DoseTimes.todayRange(if (tab == 2 && customHistoryDay) historyDay else now)
     val doses by remember(userId, range) { app.medicationRepository.observeDoseLog(userId, range.first, range.second) }.collectAsState(emptyList())
+    val corrections by remember(userId, range) {
+        app.medicationRepository.observeIntakeCorrections(userId, range.first, range.second)
+    }.collectAsState(emptyList())
+    val latestCorrections = corrections.associateBy { it.doseId }
+    fun showHistory(doseId: Long) {
+        scope.launch {
+            try {
+                originalEntry = app.medicationRepository.originalDose(userId, doseId)
+                entryHistory = app.medicationRepository.intakeCorrectionHistory(userId, doseId)
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { error = "Couldn't load intake history." }
+        }
+    }
     val todayRange = DoseTimes.todayRange(now)
     val todayDoses by remember(userId, todayRange) { app.medicationRepository.observeDoseLog(userId, todayRange.first, todayRange.second) }.collectAsState(emptyList())
     val active = remember(all) { all.filter { it.isActive } }
@@ -98,6 +117,16 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
         MedicationReminderCard(day)
         if (tab == 0) {
             PhmsSectionHeader("Today's schedule")
+            com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsOutlinedButton(enabled = !busy, onClick = {
+                busy = true; error = null
+                scope.launch {
+                    try {
+                        app.monitoringRepository.checkMissedDoses(userId).forEach { AlertHandoff.send(context, it) }
+                    } catch (cancelled: CancellationException) { throw cancelled
+                    } catch (_: Exception) { error = "Couldn't review recorded doses."
+                    } finally { busy = false }
+                }
+            }) { Text(if (busy) "Checking…" else "Review recorded doses") }
             if (count == 0) PhmsEmptyStateCard("No doses scheduled today", "Add a medication to see its schedule and reminders.",
                 PhmsIcons.Medication)
             val keys = (planned + todayDoses.map { it.dose.medicationId to it.dose.scheduledAt }).distinct().sortedBy { it.second }
@@ -137,34 +166,27 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
                         }
                         if (state == MedicationIntakeState.NOT_RECORDED) Text("No intake was recorded for this time.", style = MaterialTheme.typography.bodyMedium)
                         if (state == MedicationIntakeState.OVERDUE) Text("Checking missed-dose status…", style = MaterialTheme.typography.bodyMedium)
-                        if (state == MedicationIntakeState.TAKEN) {
-                            TakenIntakeStatus(row?.dose?.recordedAt)
-                        } else if (state == MedicationIntakeState.DUE) {
+                        val revision = row?.dose?.doseId?.let { latestCorrections[it]?.correctionId } ?: 0L
+                        val final = status in listOf(DoseStatus.TAKEN, DoseStatus.SKIPPED, DoseStatus.MISSED)
+                        if (state == MedicationIntakeState.TAKEN) TakenIntakeStatus(row?.dose?.recordedAt)
+                        if (state != MedicationIntakeState.TAKEN && state != MedicationIntakeState.SKIPPED) {
                             Button(enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = MedicationYellow, contentColor = MedicationInk),
                                 onClick = {
-                                    if (busy) return@Button
-                                    busy = true
                                     error = null
-                                    scope.launch {
-                                        try {
-                                            val confirmation = app.monitoringRepository.confirmMedicationIntake(userId, medId, at)
-                                            confirmation.alert?.let { AlertHandoff.send(context, it) }
-                                            when (confirmation.outcome) {
-                                                MonitoringRepository.IntakeOutcome.TAKEN,
-                                                MonitoringRepository.IntakeOutcome.ALREADY_TAKEN -> confirmation.doseId?.let { doseId ->
-                                                    DoseAlarms.cancelMissedCheck(context, doseId)
-                                                    DoseAlarms.cancelDoseNotification(context, doseId)
-                                                }
-                                                MonitoringRepository.IntakeOutcome.TOO_EARLY -> error = "This dose is not due yet."
-                                                MonitoringRepository.IntakeOutcome.MISSED -> error = "This dose is marked missed. Its saved status has been kept."
-                                                MonitoringRepository.IntakeOutcome.NOT_RECORDED -> error = "The intake window has passed without a recorded dose."
-                                                MonitoringRepository.IntakeOutcome.UNAVAILABLE -> error = "This dose is no longer available."
-                                            }
-                                        } catch (e: CancellationException) { throw e
-                                        } catch (e: Exception) { error = e.message ?: "Couldn't record intake."
-                                        } finally { now = System.currentTimeMillis(); busy = false }
-                                    }
+                                    entry = DoseEntry(medId, at, DoseStatus.TAKEN, null, revision, final)
                                 }) { Text("Mark as taken") }
+                            TextButton(enabled = !busy, onClick = {
+                                error = null
+                                entry = DoseEntry(medId, at, DoseStatus.SKIPPED, null, revision, final)
+                            }) { Text("Skip dose") }
+                        }
+                        if (final) TextButton(enabled = !busy, onClick = {
+                            error = null
+                            entry = DoseEntry(medId, at, if (status == DoseStatus.MISSED) DoseStatus.TAKEN else status!!,
+                                row?.dose?.recordedAt, revision, true)
+                        }) { Text("Correct entry") }
+                        row?.dose?.doseId?.let { doseId ->
+                            TextButton(onClick = { showHistory(doseId) }) { Text("Entry history") }
                         }
                     }
                 }
@@ -181,6 +203,7 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
                         Text(if (med.isActive) med.frequency else "Inactive")
                         Text(MedicationTimes.forEditing(med).joinToString(" · ", transform = DoseTimes::displayClock))
                         if (med.instructions.isNotBlank()) Text(med.instructions)
+                        MedicationPrescriptionDetails(med, providers, pharmacies)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (med.isActive) TextButton(onClick = { onEdit(med) }) { Text("Edit") }
                             TextButton(onClick = { onAudit(med) }) { Text("Changes") }
@@ -190,14 +213,10 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
                 }
             }
         } else {
-            TextButton(onClick = {
-                val cal = Calendar.getInstance().apply { timeInMillis = historyDay }
-                DatePickerDialog(context, { _, y, m, d ->
-                    historyDay = Calendar.getInstance().apply { set(y, m, d) }.timeInMillis
-                    customHistoryDay = true
-                }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
-            }) { Text(DoseTimes.formatTime(range.first) + " · Change date") }
-            PhmsSectionHeader("Intake history", supportingText = "Final taken and missed records cannot be edited or deleted.")
+            com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsDateInput(historyDay, { value ->
+                value?.let { historyDay = it; customHistoryDay = true }
+            }, "History date")
+            PhmsSectionHeader("Medication history", supportingText = "Corrections keep the original entries in your history.")
             if (doses.isEmpty()) PhmsEmptyStateCard("No recorded doses on this date", "Choose another date or view today's schedule.",
                 PhmsIcons.Continue, actionLabel = "Today's schedule", onAction = { tab = 0 })
             doses.forEach { row ->
@@ -211,9 +230,59 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
                                 all.any { it.medicationId == row.dose.medicationId && it.isActive }).label)
                             row.dose.recordedAt?.let { Text("Recorded ${intakeDateTime(it)}") }
                         }
+                        Row {
+                            TextButton(enabled = !busy, onClick = {
+                                error = null
+                                entry = DoseEntry(row.dose.medicationId, row.dose.scheduledAt,
+                                    if (row.dose.status in listOf(DoseStatus.MISSED, DoseStatus.SCHEDULED)) DoseStatus.TAKEN else row.dose.status,
+                                    row.dose.recordedAt, latestCorrections[row.dose.doseId]?.correctionId ?: 0L, true)
+                            }) { Text("Correct entry") }
+                            TextButton(onClick = { showHistory(row.dose.doseId) }) { Text("Entry history") }
+                        }
                     }
                 }
             }
         }
+    }
+    entry?.let { request ->
+        DoseEntryDialog(request, busy, error, onDismiss = { entry = null; error = null }) { status, at, reason ->
+            if (!busy) {
+                busy = true; error = null
+                scope.launch {
+                    try {
+                        val id = app.monitoringRepository.recordIntake(userId, request.medicationId, request.scheduledAt,
+                            status, at, reason, request.revision)
+                        if (status == DoseStatus.SCHEDULED)
+                            DoseAlarms.scheduleMissedCheck(context, id, request.scheduledAt + MonitoringRepository.DEFAULT_MISSED_WINDOW_MS, userId)
+                        else {
+                            DoseAlarms.cancelMissedCheck(context, id)
+                            DoseAlarms.cancelDoseNotification(context, id)
+                        }
+                        entry = null
+                    } catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { error = e.message ?: "Couldn't save intake." }
+                    finally { busy = false; now = System.currentTimeMillis() }
+                }
+            }
+        }
+    }
+    entryHistory?.let { history ->
+        AlertDialog(onDismissRequest = { entryHistory = null }, title = { Text("Intake entry history") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    originalEntry?.let {
+                        Text("Original entry: ${it.status}")
+                        it.recordedAt?.let { at -> Text(intakeDateTime(at)) }
+                    }
+                    history.forEach {
+                        Text(when (it.status) { DoseStatus.TAKEN -> "Taken"; DoseStatus.SKIPPED -> "Skipped"; DoseStatus.MISSED -> "Missed"; else -> "Not recorded" },
+                            style = MaterialTheme.typography.titleSmall)
+                        it.actualTakenAt?.let { at -> Text("Actual intake: ${intakeDateTime(at)}") }
+                        Text("Entry recorded: ${intakeDateTime(it.changedAt)}")
+                        Text(it.reason)
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { entryHistory = null }) { Text("Close") } })
     }
 }

@@ -8,6 +8,7 @@ import com.cse3310.projecthealthmonitoringsystem.data.entity.WeightUnit
 
 data class MeasurementPreferences(val fahrenheit: Boolean = true, val pounds: Boolean = true, val imperialHeight: Boolean = true) {
     val weightUnit get() = if (pounds) WeightUnit.LB else WeightUnit.KG
+    val weightLabel get() = if (pounds) "lbs" else "kg"
 }
 object MeasurementUnits {
     fun fahrenheit(c: Double) = c * 9 / 5 + 32

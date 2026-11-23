@@ -16,19 +16,19 @@ object AlertHandoff {
     }
 
     fun usesAutomaticSms(contact: com.cse3310.projecthealthmonitoringsystem.data.entity.Designee): Boolean =
-        contact.preferredMethod == ContactMethod.SMS
+        contact.allowsAutomaticSms()
 
     suspend fun send(context: Context, alert: Alert): String {
         val app = context.phms()
         val userId = alert.userId
         if (!com.cse3310.projecthealthmonitoringsystem.auth.AccountSession.whileActive(context, userId) {
-            AlertSender.notifyUser(context, (100_000 + alert.alertId).toInt(), title(alert.type), alert.message)
+            AlertSender.notifyUser(context, (100_000 + alert.alertId).toInt(), title(alert.type), updatedEmergencyGuidance(alert.message))
         }) return "Account is signed out"
 
         val designees = app.communicationRepository.getDesignees(userId).filter(::usesAutomaticSms)
         if (designees.isEmpty()) return "No automatic SMS contacts. Open Communication for email or calls."
 
-        val text = "PHMS alert: ${alert.message}"
+        val text = "PHMS alert: ${updatedEmergencyGuidance(alert.message)}"
         val texted = mutableListOf<String>()
         val failed = mutableListOf<String>()
         for (d in designees) {

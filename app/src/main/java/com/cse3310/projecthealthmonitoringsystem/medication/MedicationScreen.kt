@@ -1,6 +1,7 @@
 package com.cse3310.projecthealthmonitoringsystem.medication
 
 import android.Manifest
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -70,6 +71,7 @@ private fun MedicationContent() {
 
     val medications by remember(userId) { app.medicationRepository.observeActiveMedications(userId) }.collectAsState(initial = emptyList())
     val doctors by remember(userId) { app.maintenanceRepository.observeDoctors(userId) }.collectAsState(initial = emptyList())
+    val pharmacies by remember(userId) { app.maintenanceRepository.observePharmacies(userId) }.collectAsState(initial = emptyList())
     val today = remember { DoseTimes.todayRange() }
     val todayDoses by remember { app.medicationRepository.observeDoseLog(userId, today.first, today.second) }
         .collectAsState(initial = emptyList())
@@ -86,6 +88,20 @@ private fun MedicationContent() {
     var ongoing by remember { mutableStateOf(true) }
     var timesPerDay by remember { mutableStateOf(1) }
     var doctorId by remember { mutableStateOf<Long?>(null) }
+    var pharmacyId by remember { mutableStateOf<Long?>(null) }
+    var pharmacyTouched by remember { mutableStateOf(false) }
+    var addingPharmacy by remember { mutableStateOf(false) }
+    var addingProvider by remember { mutableStateOf(false) }
+    var choosingProvider by remember { mutableStateOf(false) }
+    var prescriptionNumber by remember { mutableStateOf("") }
+    var refillsRemaining by remember { mutableStateOf("") }
+    var nextRefillAt by remember { mutableStateOf<Long?>(null) }
+    var treatmentDatesValid by remember { mutableStateOf(true) }
+    var refillDateValid by remember { mutableStateOf(true) }
+    androidx.compose.runtime.LaunchedEffect(pharmacies, showForm, editing) {
+        if (showForm && editing == null && !pharmacyTouched && pharmacyId == null)
+            pharmacyId = pharmacies.firstOrNull { it.isPreferred }?.pharmacyId
+    }
     var formError by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var checking by remember { mutableStateOf(false) }
@@ -108,13 +124,23 @@ private fun MedicationContent() {
         ongoing = med?.endDate == null
         timesPerDay = med?.let { Frequency.timesPerDay(it.frequency) } ?: 1
         doctorId = med?.doctorId
+        pharmacyId = if (med == null) pharmacies.firstOrNull { it.isPreferred }?.pharmacyId else med.pharmacyId
+        pharmacyTouched = false
+        prescriptionNumber = med?.prescriptionNumber.orEmpty()
+        refillsRemaining = med?.refillsRemaining?.toString().orEmpty()
+        nextRefillAt = med?.nextRefillAt
+        treatmentDatesValid = true; refillDateValid = true
         formError = null
         showForm = true
     }
 
     fun validate(): String? =
-        MedicationTimes.error(doseTimes, timesPerDay, startDate, if (ongoing) null else endDate, ongoing)
+        (if (!treatmentDatesValid || !refillDateValid) "Enter valid dates as MM/DD/YYYY." else null)
+            ?: MedicationTimes.error(doseTimes, timesPerDay, startDate, if (ongoing) null else endDate, ongoing)
             ?: HealthValidation.medication(name, dosage, Frequency.label(timesPerDay), doseTimes.firstOrNull() ?: -1)
+            ?: com.cse3310.projecthealthmonitoringsystem.validation.ProviderPharmacyValidation.refillInput(refillsRemaining)
+            ?: com.cse3310.projecthealthmonitoringsystem.validation.ProviderPharmacyValidation.prescription(
+                prescriptionNumber, refillsRemaining.toIntOrNull(), nextRefillAt)
 
     fun save(reportConflicts: Boolean) {
         if (saving) return
@@ -139,12 +165,16 @@ private fun MedicationContent() {
                         endDate = if (ongoing) null else endDate,
                         doseTimesMinutes = encodedTimes,
                         doctorId = doctorId,
+                        pharmacyId = pharmacyId,
+                        prescriptionNumber = prescriptionNumber.trim().ifBlank { null },
+                        refillsRemaining = refillsRemaining.toIntOrNull(),
+                        nextRefillAt = nextRefillAt,
                         createdAt = now,
                         updatedAt = now
                     )
                     val id = app.medicationRepository.addMedication(userId, med)
                     if (id == null) {
-                        toast("Could not save: pick one of your doctors.")
+                        toast("Could not save: check the selected provider and pharmacy.")
                         return@launch
                     }
                     DoseAlarms.scheduleNextReminder(context, med.copy(medicationId = id))
@@ -160,7 +190,11 @@ private fun MedicationContent() {
                         startDate = startDate,
                         endDate = if (ongoing) null else endDate,
                         doseTimesMinutes = encodedTimes,
-                        doctorId = doctorId
+                        doctorId = doctorId,
+                        pharmacyId = pharmacyId,
+                        prescriptionNumber = prescriptionNumber.trim().ifBlank { null },
+                        refillsRemaining = refillsRemaining.toIntOrNull(),
+                        nextRefillAt = nextRefillAt
                     )
                     if (!app.medicationRepository.editMedication(userId, updated)) {
                         toast("Could not save the changes.")
@@ -196,9 +230,12 @@ private fun MedicationContent() {
                 if (showForm) null else "Your medicines and daily schedule.",
                 com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsIcons.Medication,
                 if (showForm) dismissForm else null)
-            else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Medication", style = MaterialTheme.typography.headlineLarge)
-                Text("Your medicines and daily schedule.", style = MaterialTheme.typography.bodyMedium)
+            else MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
+                primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFDF48),
+                onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF111827))) {
+                com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsScreenHeader(
+                    "Medication", "Your medicines and daily schedule.",
+                    com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsIcons.Medication)
             }
         }
 
@@ -216,7 +253,7 @@ private fun MedicationContent() {
                             singleLine = true, modifier = Modifier.fillMaxWidth())
                         MedicationTreatmentDates(startDate, endDate, ongoing, !saving && !checking,
                             onStart = { startDate = it }, onEnd = { endDate = it }, onOngoing = { ongoing = it },
-                            showErrors = formError != null)
+                            showErrors = formError != null, onValidityChange = { treatmentDatesValid = it })
                         Text("How often")
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             (1..6).forEach { n ->
@@ -229,24 +266,30 @@ private fun MedicationContent() {
                         MedicationDoseTimeFields(doseTimes, !saving && !checking, formError != null) { index, minutes ->
                             doseTimes = doseTimes.mapIndexed { position, old -> if (position == index) minutes else old }
                         }
-                        Text("Prescribing doctor")
-                        if (doctors.isEmpty()) {
-                            Text("Add your doctor in Care details.", style = MaterialTheme.typography.bodySmall)
-                        } else {
-                            Row(
-                                Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                FilterChip(selected = doctorId == null, onClick = { doctorId = null }, label = { Text("None") })
+                        Text("Prescribing provider (optional)")
+                        androidx.compose.foundation.layout.Box {
+                            OutlinedButton(enabled = !saving && !checking, modifier = Modifier.fillMaxWidth(),
+                                onClick = { choosingProvider = true }) {
+                                Text(doctors.firstOrNull { it.doctor.doctorId == doctorId }?.doctor?.name ?: "None",
+                                    Modifier.weight(1f))
+                                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.ExpandMore, "Choose provider")
+                            }
+                            androidx.compose.material3.DropdownMenu(choosingProvider, onDismissRequest = { choosingProvider = false }) {
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("None") },
+                                    onClick = { doctorId = null; choosingProvider = false })
                                 doctors.forEach { d ->
-                                    FilterChip(
-                                        selected = doctorId == d.doctor.doctorId,
-                                        onClick = { doctorId = d.doctor.doctorId },
-                                        label = { Text(d.doctor.name) }
-                                    )
+                                    androidx.compose.material3.DropdownMenuItem(text = { Text(d.doctor.name) },
+                                        onClick = { doctorId = d.doctor.doctorId; choosingProvider = false })
                                 }
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("+ Add provider") },
+                                    onClick = { choosingProvider = false; addingProvider = true })
                             }
                         }
+                        MedicationPrescriptionFields(pharmacies, pharmacyId, prescriptionNumber, refillsRemaining, nextRefillAt,
+                            enabled = !saving && !checking,
+                            onPharmacy = { pharmacyTouched = true; pharmacyId = it },
+                            onRx = { prescriptionNumber = it }, onRefills = { refillsRemaining = it }, onDate = { nextRefillAt = it },
+                            onAddPharmacy = { addingPharmacy = true }, onDateValidityChange = { refillDateValid = it })
                         formError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(enabled = !saving && !checking, onClick = {
@@ -317,6 +360,15 @@ private fun MedicationContent() {
             dismissButton = { TextButton(onClick = { pendingConflicts = emptyList() }) { Text("Cancel") } }
         )
     }
+
+    if (addingPharmacy) com.cse3310.projecthealthmonitoringsystem.maintenance.PharmacyEditor(
+        com.cse3310.projecthealthmonitoringsystem.data.entity.Pharmacy(userId = userId, name = ""),
+        onDismiss = { addingPharmacy = false },
+        onSaved = { pharmacyId = it; pharmacyTouched = true; addingPharmacy = false })
+    if (addingProvider) com.cse3310.projecthealthmonitoringsystem.maintenance.ProviderEditor(
+        com.cse3310.projecthealthmonitoringsystem.data.entity.Doctor(userId = userId, name = ""),
+        onDismiss = { addingProvider = false },
+        onSaved = { doctorId = it; addingProvider = false })
 
     deleting?.let { med ->
         AlertDialog(

@@ -109,7 +109,7 @@ abstract class DietDao {
     @Query("SELECT EXISTS(SELECT 1 FROM Weight WHERE weightId = :weightId AND userId = :userId)")
     abstract suspend fun weightOwned(userId: String, weightId: Long): Boolean
 
-    @Query("SELECT * FROM Weight WHERE userId = :userId ORDER BY recordedAt DESC")
+    @Query("SELECT * FROM Weight WHERE userId = :userId ORDER BY recordedAt DESC, weightId DESC")
     abstract fun observeWeights(userId: String): Flow<List<Weight>>
 
     /** The latest two weight entries, newest first, for "weight change since last entry". */

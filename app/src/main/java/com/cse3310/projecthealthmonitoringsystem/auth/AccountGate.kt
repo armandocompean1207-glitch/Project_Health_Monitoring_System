@@ -219,7 +219,8 @@ private fun AuthBrandingPanel() {
     Surface(color = AuthYellow, contentColor = AuthInk, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(Icons.Outlined.HealthAndSafety, null, Modifier.size(64.dp))
+            Icon(androidx.compose.ui.res.painterResource(com.cse3310.projecthealthmonitoringsystem.R.drawable.ic_phms_brandshield),
+                null, Modifier.size(64.dp), tint = AuthInk)
             Text("PHMS", style = MaterialTheme.typography.displayLarge.copy(
                 fontSize = 48.sp, lineHeight = 60.sp, fontWeight = FontWeight.ExtraBold),
                 textAlign = TextAlign.Center)

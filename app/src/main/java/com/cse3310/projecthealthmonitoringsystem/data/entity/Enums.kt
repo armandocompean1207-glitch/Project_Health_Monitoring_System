@@ -1,7 +1,7 @@
 package com.cse3310.projecthealthmonitoringsystem.data.entity
 
 /** DoseLog status. Moves SCHEDULED -> TAKEN or SCHEDULED -> MISSED once; then final (enforced by SQL triggers). */
-enum class DoseStatus { SCHEDULED, TAKEN, MISSED }
+enum class DoseStatus { SCHEDULED, TAKEN, MISSED, SKIPPED }
 
 /** Alert.type */
 enum class AlertType { MISSED_DOSE, CONFLICT, ABNORMAL_VITAL }

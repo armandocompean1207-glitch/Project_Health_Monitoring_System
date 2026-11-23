@@ -64,19 +64,19 @@ fun ProfileScreen(onBack: () -> Unit, onDoctors: () -> Unit, onAppointments: () 
                     PhmsStatusPill("Your private profile")
                     Text("Gender: ${current.gender.ifBlank { "Not provided" }}")
                     Text("Age: ${current.dateOfBirth?.let { HealthValidation.age(it).toString() } ?: current.age.takeIf { it > 0 }?.toString() ?: "Not provided"}")
-                    current.dateOfBirth?.let { Text("Date of birth: " + SimpleDateFormat("MMM d, yyyy", Locale.US).format(Date(HealthValidation.parseBirthDate(it)!!))) }
+                    current.dateOfBirth?.let { Text("Date of birth: " + SimpleDateFormat("MM/dd/yyyy", Locale.US).format(Date(HealthValidation.parseBirthDate(it)!!))) }
                     Text("Height: " + if (current.heightCm <= 0) "Not provided" else if (prefs.imperialHeight) {
                         val inches = kotlin.math.round(MeasurementUnits.inches(current.heightCm)).toInt()
                         "${inches / 12} ft ${inches % 12} in"
                     } else String.format(Locale.US, "%.1f cm", current.heightCm))
-                    Text("Weight: " + if (current.weight <= 0) "Not provided" else String.format(Locale.US, "%.1f %s", DietRepository.convert(current.weight, current.weightUnit, prefs.weightUnit), prefs.weightUnit.name.lowercase()))
+                    Text("Weight: " + if (current.weight <= 0) "Not provided" else String.format(Locale.US, "%.1f %s", DietRepository.convert(current.weight, current.weightUnit, prefs.weightUnit), prefs.weightLabel))
                     Text("Phone: ${current.phone.ifBlank { "Not provided" }}")
                     Button(onClick = { editing = true }) { Text("Edit personal details") }
                 }
             }
         }
-        PhmsActionCard("Your doctors", "View and manage your care team.", PhmsIcons.DataMaintenance, onDoctors)
-        PhmsActionCard("Appointments", "View your saved doctor visits.", PhmsIcons.Appointments, onAppointments)
+        PhmsActionCard("My providers", "View and manage your care team.", PhmsIcons.Providers, onDoctors)
+        PhmsActionCard("Appointments", "View your saved provider visits.", PhmsIcons.Appointments, onAppointments)
         OutlinedButton(onClick = { confirmLogout = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Log out") }
     }
     if (confirmLogout) AlertDialog(onDismissRequest = { if (!busy) confirmLogout = false },
@@ -99,6 +99,7 @@ private fun ProfileEditor(profile: Profile, busy: Boolean, onCancel: () -> Unit,
     var name by remember { mutableStateOf(profile.name) }
     var gender by remember { mutableStateOf(profile.gender) }
     var birth by remember { mutableStateOf(profile.dateOfBirth) }
+    var birthInputValid by remember { mutableStateOf(true) }
     var cm by remember { mutableStateOf(profile.heightCm.takeIf { it > 0 }?.toString() ?: "") }
     val initialInches = kotlin.math.round(MeasurementUnits.inches(profile.heightCm)).toInt()
     var feet by remember { mutableStateOf(if (profile.heightCm > 0) (initialInches / 12).toString() else "") }
@@ -118,21 +119,18 @@ private fun ProfileEditor(profile: Profile, busy: Boolean, onCancel: () -> Unit,
     val nameError = HealthValidation.name(name)
     val phoneError = HealthValidation.phone(phone)
     val birthError = birth?.let { HealthValidation.birthDate(it) }
-    val valid = listOfNotNull(nameError, phoneError, birthError, heightError, weightError).isEmpty()
+    val valid = birthInputValid && listOfNotNull(nameError, phoneError, birthError, heightError, weightError).isEmpty()
     val dismiss = rememberGuardedDismiss(true, busy, onCancel)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         PhmsScreenHeader("Edit personal details", icon = PhmsIcons.Profile, onBack = dismiss)
         OutlinedTextField(name, { name = it }, label = { Text("Full name") }, enabled = !busy,
             isError = attempted && nameError != null, supportingText = { if (attempted) nameError?.let { Text(it) } }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(gender, { gender = it }, label = { Text("Gender (optional)") }, enabled = !busy, modifier = Modifier.fillMaxWidth())
-        OutlinedButton(enabled = !busy, onClick = {
-            val c = java.util.Calendar.getInstance().apply { birth?.let { timeInMillis = HealthValidation.parseBirthDate(it) ?: timeInMillis } }
-            android.app.DatePickerDialog(context, { _, y, m, d -> birth = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, d) },
-                c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH))
-                .apply { datePicker.maxDate = System.currentTimeMillis() }.show()
-        }, modifier = Modifier.fillMaxWidth()) { Icon(PhmsIcons.Appointments, null); Text(birth?.let { "Date of birth: $it" } ?: "Choose date of birth", Modifier.padding(start = 8.dp)) }
+        PhmsDateInput(birth?.let { HealthValidation.parseBirthDate(it) }, { value ->
+            birth = value?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it)) }
+        }, "Date of birth", required = false, maxDate = System.currentTimeMillis(), enabled = !busy, useStandardFieldStyle = true,
+            onValidityChange = { birthInputValid = it })
         birth?.let { Text("Age ${HealthValidation.age(it)}", style = MaterialTheme.typography.bodyMedium) }
-            ?: Text("Your previous age is kept until you add a date of birth.", style = MaterialTheme.typography.bodyMedium)
         if (prefs.imperialHeight) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(feet, { feet = it }, label = { Text("Height (ft)") }, enabled = !busy, modifier = Modifier.weight(1f),
                 isError = attempted && heightError != null, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal))
@@ -140,12 +138,16 @@ private fun ProfileEditor(profile: Profile, busy: Boolean, onCancel: () -> Unit,
                 isError = attempted && heightError != null, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal))
         } else OutlinedTextField(cm, { cm = it }, label = { Text("Height (cm)") }, enabled = !busy, modifier = Modifier.fillMaxWidth())
         if (attempted) heightError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        OutlinedTextField(weight, { weight = it }, label = { Text("Weight (${prefs.weightUnit.name.lowercase()})") }, enabled = !busy,
+        OutlinedTextField(weight, { weight = it }, label = { Text("Weight (${prefs.weightLabel})") }, enabled = !busy,
             isError = attempted && weightError != null, supportingText = { if (attempted) weightError?.let { Text(it) } },
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
         OutlinedTextField(phone, { phone = it }, label = { Text("Phone (optional)") }, enabled = !busy,
             isError = attempted && phoneError != null, supportingText = { if (attempted) phoneError?.let { Text(it) } }, modifier = Modifier.fillMaxWidth())
-        Button(enabled = !busy, modifier = Modifier.fillMaxWidth(), onClick = {
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(enabled = !busy, modifier = Modifier.weight(1.3f).fillMaxHeight().heightIn(min = 48.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFDF48), contentColor = androidx.compose.ui.graphics.Color(0xFF111827)),
+            onClick = {
             attempted = true
             if (valid) onSave(profile.copy(name = name.trim(), gender = gender.trim(), dateOfBirth = birth,
                 age = birth?.let { HealthValidation.age(it) } ?: profile.age,
@@ -154,7 +156,13 @@ private fun ProfileEditor(profile: Profile, busy: Boolean, onCancel: () -> Unit,
                 weight = if (weight == initialWeight) profile.weight else if (weightValue.isFinite()) weightValue else 0.0,
                 weightUnit = if (weight == initialWeight) profile.weightUnit else prefs.weightUnit, phone = phone.trim()))
         }) { Text(if (busy) "Saving…" else "Save profile") }
-        TextButton(enabled = !busy, onClick = dismiss) { Text("Cancel") }
+        androidx.compose.material3.OutlinedButton(enabled = !busy, onClick = dismiss,
+            modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.outlinedButtonColors(containerColor = androidx.compose.ui.graphics.Color.White, contentColor = androidx.compose.ui.graphics.Color(0xFF111827)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFE8E1D8))) { Text("Cancel") }
+        }
     }
 }
 
@@ -167,17 +175,17 @@ fun AppointmentsScreen(onBack: () -> Unit, onManage: () -> Unit) {
     val doctors by remember(id) { repository.observeDoctors(id) }.collectAsState(emptyList())
     PhmsPage {
         PhmsScreenHeader("Appointments", icon = PhmsIcons.Appointments, onBack = onBack)
-        if (visits.isEmpty()) PhmsEmptyStateCard("No visits saved", "Your doctor visits will appear here when added by your care forms.",
-            PhmsIcons.Appointments, actionLabel = "Manage doctors", onAction = onManage)
+        if (visits.isEmpty()) PhmsEmptyStateCard("No visits saved", "Your provider visits will appear here when added.",
+            PhmsIcons.Appointments, actionLabel = "Manage providers", onAction = onManage)
         visits.forEach {
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(it.doctorName, style = MaterialTheme.typography.titleMedium)
-                    Text(SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.US).format(Date(it.visit.visitAt)))
+                    Text(SimpleDateFormat("MM/dd/yyyy · h:mm a", Locale.US).format(Date(it.visit.visitAt)))
                 }
             }
         }
-        PhmsSectionHeader("Your doctors")
+        PhmsSectionHeader("My providers")
         doctors.forEach {
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {

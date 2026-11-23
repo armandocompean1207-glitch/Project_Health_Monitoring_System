@@ -32,7 +32,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private fun dateLabel(time: Long) = SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.US).format(Date(time))
+private fun dateLabel(time: Long) = SimpleDateFormat("MM/dd/yyyy · h:mm a", Locale.US).format(Date(time))
 private fun categoryIcon(category: NoteCategory) = when (category) {
     NoteCategory.RECIPES -> PhmsIcons.Diet
     NoteCategory.HEALTH -> PhmsIcons.Vitals
@@ -72,6 +72,9 @@ fun NotesScreen(onBack: () -> Unit) {
     }
     BackHandler(enabled = !editing && selectedId != null) { selectedId = null; error = null }
 
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
+        primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFDF48),
+        onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF111827))) {
     if (editing) {
         key(userId, selectedId) {
             NoteEditor(selected, busy, error, onCancel = { editing = false; error = null }, onSave = ::save)
@@ -109,7 +112,7 @@ fun NotesScreen(onBack: () -> Unit) {
                 FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text("All") })
                 NoteCategory.entries.forEach { category ->
                     FilterChip(selected = filter == category.name, onClick = { filter = category.name },
-                        label = { Text(category.label) }, leadingIcon = { Icon(categoryIcon(category), null, Modifier.size(20.dp)) })
+                        label = { Text(category.label) }, leadingIcon = { NoteCategoryIcon(category) })
                 }
             }
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -164,6 +167,16 @@ fun NotesScreen(onBack: () -> Unit) {
                 }) { Text(if (busy) "Deleting…" else "Delete") }
             }, dismissButton = { TextButton(enabled = !busy, onClick = { confirmDelete = false }) { Text("Cancel") } })
     }
+    }
+}
+
+@Composable
+private fun NoteCategoryIcon(category: NoteCategory) {
+    androidx.compose.material3.Surface(shape = androidx.compose.foundation.shape.CircleShape,
+        color = androidx.compose.ui.graphics.Color(0xFFFFDF48)) {
+        Icon(categoryIcon(category), null, Modifier.padding(4.dp).size(20.dp),
+            tint = androidx.compose.ui.graphics.Color(0xFF111827))
+    }
 }
 
 @Composable
@@ -196,7 +209,7 @@ private fun NoteEditor(note: Note?, busy: Boolean, error: String?, onCancel: () 
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NoteCategory.entries.forEach {
                     FilterChip(selected = category == it, onClick = { categoryName = it.name }, enabled = !busy,
-                        label = { Text(it.label) }, leadingIcon = { Icon(categoryIcon(it), null, Modifier.size(20.dp)) })
+                        label = { Text(it.label) }, leadingIcon = { NoteCategoryIcon(it) })
                 }
             }
             OutlinedTextField(body, { body = it }, modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp),

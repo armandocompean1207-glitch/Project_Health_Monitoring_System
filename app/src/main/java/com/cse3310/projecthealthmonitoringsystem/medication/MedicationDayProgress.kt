@@ -7,7 +7,7 @@ import com.cse3310.projecthealthmonitoringsystem.data.repository.MonitoringRepos
 /** Display-only projection. No dose rows or final statuses are created or changed here. */
 internal data class MedicationDayProgress(
     val total: Int, val taken: Int, val remaining: Int, val missed: Int, val unrecorded: Int,
-    val nextAt: Long?
+    val nextAt: Long?, val skipped: Int = 0
 )
 
 internal fun medicationDayProgress(
@@ -22,9 +22,10 @@ internal fun medicationDayProgress(
     fun finalStatus(key: Pair<Long, Long>) = recorded[key]?.status
     val taken = occurrences.count { finalStatus(it) == DoseStatus.TAKEN }
     val missed = occurrences.count { finalStatus(it) == DoseStatus.MISSED }
-    val pending = occurrences.filter { finalStatus(it) != DoseStatus.TAKEN && finalStatus(it) != DoseStatus.MISSED }
+    val skipped = occurrences.count { finalStatus(it) == DoseStatus.SKIPPED }
+    val pending = occurrences.filter { finalStatus(it) !in setOf(DoseStatus.TAKEN, DoseStatus.MISSED, DoseStatus.SKIPPED) }
     // An overdue occurrence without a final database status is not an inferred MISSED record.
     val unrecorded = pending.count { it.second <= now - missedWindowMs }
     val next = pending.filter { it.first in activeMedicationIds && it.second >= now }.minOfOrNull { it.second }
-    return MedicationDayProgress(occurrences.size, taken, pending.size - unrecorded, missed, unrecorded, next)
+    return MedicationDayProgress(occurrences.size, taken, pending.size - unrecorded, missed, unrecorded, next, skipped)
 }

@@ -70,6 +70,12 @@ object AccountSession {
         val repo = context.phms().medicationRepository
         repo.observeAllMedications(id).first().forEach { DoseAlarms.cancelReminder(context, it.medicationId) }
         repo.observeDoseLog(id, 0, Long.MAX_VALUE).first().forEach { DoseAlarms.cancelMissedCheck(context, it.dose.doseId) }
+        try { com.cse3310.projecthealthmonitoringsystem.healthguide.VaccinationReminders.cancelAll(context, id) }
+        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (failure: Exception) { android.util.Log.w("PHMS", "Vaccination reminders remain blocked for the signed-out account", failure) }
+        try { com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentReminders.cancelAll(context, id) }
+        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (failure: Exception) { android.util.Log.w("PHMS", "Appointment reminders remain blocked for the signed-out account", failure) }
         context.getSystemService(NotificationManager::class.java).cancelAll()
     }
     suspend fun start(context: Context, id: String, demo: Boolean = false) {
@@ -85,6 +91,12 @@ object AccountSession {
                 .filter { it.dose.status == com.cse3310.projecthealthmonitoringsystem.data.entity.DoseStatus.SCHEDULED }
                 .forEach { DoseAlarms.scheduleMissedCheck(context, it.dose.doseId,
                     it.dose.scheduledAt + com.cse3310.projecthealthmonitoringsystem.data.repository.MonitoringRepository.DEFAULT_MISSED_WINDOW_MS, id) }
+            try { com.cse3310.projecthealthmonitoringsystem.healthguide.VaccinationReminders.restore(context, id) }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (failure: Exception) { android.util.Log.w("PHMS", "Optional vaccination reminders could not be restored", failure) }
+            try { com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentReminders.restore(context, id) }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (failure: Exception) { android.util.Log.w("PHMS", "Appointment reminders could not be restored", failure) }
             CurrentUser.signIn(id)
         } catch (e: Exception) { setReminderUser(context, null); throw e }
     }

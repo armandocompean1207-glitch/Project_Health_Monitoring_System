@@ -13,9 +13,10 @@ import androidx.room.PrimaryKey
     tableName = "Medication",
     foreignKeys = [
         ForeignKey(entity = User::class, parentColumns = ["userId"], childColumns = ["userId"], onDelete = ForeignKey.CASCADE),
-        ForeignKey(entity = Doctor::class, parentColumns = ["doctorId"], childColumns = ["doctorId"], onDelete = ForeignKey.SET_NULL)
+        ForeignKey(entity = Doctor::class, parentColumns = ["doctorId"], childColumns = ["doctorId"], onDelete = ForeignKey.SET_NULL),
+        ForeignKey(entity = Pharmacy::class, parentColumns = ["pharmacyId"], childColumns = ["pharmacyId"], onDelete = ForeignKey.SET_NULL)
     ],
-    indices = [Index(value = ["userId", "isActive"]), Index("doctorId")]
+    indices = [Index(value = ["userId", "isActive"]), Index("doctorId"), Index("pharmacyId")]
 )
 data class Medication(
     @PrimaryKey(autoGenerate = true) val medicationId: Long = 0,
@@ -34,5 +35,9 @@ data class Medication(
     val createdAt: Long,
     val updatedAt: Long,
     /** Comma-separated, unique minutes after local midnight. Null preserves the legacy schedule. */
-    val doseTimesMinutes: String? = null
+    val doseTimesMinutes: String? = null,
+    val pharmacyId: Long? = null,
+    val prescriptionNumber: String? = null,
+    val refillsRemaining: Int? = null,
+    val nextRefillAt: Long? = null
 )

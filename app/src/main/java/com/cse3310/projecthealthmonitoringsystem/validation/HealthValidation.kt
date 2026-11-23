@@ -23,6 +23,19 @@ object HealthValidation {
         if (needsSecondary && (secondary == null || !secondary.isFinite()))
             return Issue("Diastolic", "Enter a finite diastolic reading.")
         if (secondary != null && !secondary.isFinite()) return Issue("Second reading", "Enter a finite number.")
+        if (!needsSecondary && !key.contains("pressure") && secondary != null)
+            return Issue("Second reading", "This measurement accepts one reading.")
+        val expectedUnit = when {
+            key.contains("pressure") -> "mmHg"
+            key.contains("glucose") || key.contains("cholesterol") -> "mg/dL"
+            key.contains("heart") || key.contains("pulse") -> "bpm"
+            key.contains("oxygen") -> "%"
+            else -> null
+        }
+        if (expectedUnit != null && unit != expectedUnit)
+            return Issue("Unit", "Use $expectedUnit for this measurement.")
+        if (key.contains("temperature") && unit !in listOf("°F", "°C"))
+            return Issue("Unit", "Choose Fahrenheit or Celsius.")
         fun range(field: String, n: Double, low: Double, high: Double, units: String) =
             if (n !in low..high) Issue(field, "Enter $field between $low and $high $units.") else null
         return when {

@@ -1,13 +1,9 @@
 package com.cse3310.projecthealthmonitoringsystem.monitoring
 
-import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,24 +51,25 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, o
     val app = context.phms()
     val userId = CurrentUser.userId
     val scope = rememberCoroutineScope()
-    remember { AlertSender.ensureChannel(context) }
+    LaunchedEffect(context) { AlertSender.ensureChannel(context) }
 
     val alerts by remember(userId) { app.monitoringRepository.observeAlerts(userId) }.collectAsState(initial = emptyList())
     val designees by remember(userId) { app.communicationRepository.observeDesignees(userId) }.collectAsState(initial = emptyList())
     val medications by remember(userId) { app.medicationRepository.observeActiveMedications(userId) }.collectAsState(initial = emptyList())
 
-    var notificationsAllowed by remember { mutableStateOf(AlertSender.canNotify(context)) }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { notificationsAllowed = AlertSender.canNotify(context) }
+    val preferences = com.cse3310.projecthealthmonitoringsystem.settings.rememberMeasurementPreferences()
+    val readings by remember(userId) { app.vitalsRepository.observeVitalSigns(userId) }.collectAsState(initial = emptyList())
+    val readingsById = readings.associateBy { it.vital.vitalId }
+    var needsContact by remember(userId) { mutableStateOf<Long?>(null) }
+    fun notifyPerson(alertId: Long) {
+        if (designees.isEmpty()) needsContact = alertId else onAlertCommunication(alertId)
+    }
 
     var viewing by remember { mutableStateOf<Alert?>(null) }
     var viewingLog by remember { mutableStateOf<List<CommunicationLog>>(emptyList()) }
 
-    fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
     var historyTab by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
     var conflicts by remember { mutableStateOf<List<MedicationConflict>>(emptyList()) }
     var simulate by remember { mutableStateOf<com.cse3310.projecthealthmonitoringsystem.data.entity.Medication?>(null) }
     LaunchedEffect(userId, medications) {
@@ -89,6 +86,11 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, o
     }
 
 
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
+        onSurface = androidx.compose.ui.graphics.Color(0xFF111827),
+        onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF111827),
+        primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFDF48),
+        onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF111827))) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -104,31 +106,6 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, o
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
-        if (!notificationsAllowed) item {
-            OutlinedCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Enable notifications for dose reminders.", style = MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick = {
-                        val perms = if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
-                        if (perms.isNotEmpty()) permissionLauncher.launch(perms)
-                    }) { Text("Notification permission") }
-                }
-            }
-        }
-        item {
-            OutlinedButton(enabled = !busy, onClick = {
-                busy = true; error = null
-                scope.launch {
-                    try {
-                        val newAlerts = app.monitoringRepository.checkMissedDoses(userId)
-                        newAlerts.forEach { AlertHandoff.send(context, it) }
-                        toast(if (newAlerts.isEmpty()) "No new missed-dose alerts." else "Missed-dose alerts updated.")
-                    } catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { error = "Unable to refresh alerts." }
-                    finally { busy = false }
-                }
-            }) { Text(if (busy) "Checking…" else "Check recorded doses") }
-        }
         val visible = alerts.filter { (it.acknowledgedAt != null) == historyTab }
         if (visible.isEmpty()) item {
             PhmsEmptyStateCard(if (historyTab) "No acknowledged alerts" else "No active alerts",
@@ -136,7 +113,8 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, o
                 PhmsIcons.Alerts, actionLabel = "Manage trusted contacts", onAction = onOpenCommunication)
         }
         items(visible, key = { it.alertId }) { alert ->
-            AlertSummary(alert, onDetails = {
+            val content = presentAlert(alert, readingsById[alert.vitalId], preferences)
+            val showDetails: () -> Unit = {
                 scope.launch {
                     try {
                         viewingLog = app.communicationRepository.getLogsForAlert(userId, alert.alertId)
@@ -144,12 +122,21 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, o
                     } catch (e: CancellationException) { throw e }
                     catch (_: Exception) { error = "Unable to load alert details." }
                 }
-            }, onAcknowledge = if (alert.acknowledgedAt == null) ({ acknowledge(alert) }) else null)
+            }
+            if (historyTab) {
+                AlertHistoryCard(content, alert.acknowledgedAt, showDetails)
+            } else {
+                AlertSummary(content, onDetails = showDetails,
+                    onAcknowledge = if (alert.acknowledgedAt == null) ({ acknowledge(alert) }) else null,
+                    onNotify = { notifyPerson(alert.alertId) })
+            }
         }
         item {
-            PhmsSectionHeader("Medication interactions", supportingText = "Matches from the project's sample rule table. Not a clinical assessment.")
+            PhmsSectionHeader("Medication interactions", supportingText = "Check for potential interactions between your recorded medications.")
+            Text("This limited check cannot guarantee medication safety. Ask your provider or pharmacist.",
+                style = MaterialTheme.typography.bodySmall)
         }
-        if (conflicts.isEmpty()) item { Text("No matching pairs in the current sample rules. This does not establish that medications are safe together.",
+        if (conflicts.isEmpty()) item { Text("No potential interactions found in the available checks.",
             style = MaterialTheme.typography.bodyMedium) }
         items(conflicts) { pair ->
             OutlinedCard(Modifier.fillMaxWidth()) {
@@ -176,6 +163,8 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, o
         item { Spacer(Modifier.padding(bottom = 16.dp)) }
     }
 
+    }
+
     simulate?.let { med ->
         AlertDialog(onDismissRequest = { simulate = null }, title = { Text("Create fictional missed dose?") },
             text = { Text("Debug account only. This creates a permanent dose/alert record. No contacts are messaged by this demonstration action.") },
@@ -193,16 +182,23 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, o
             dismissButton = { TextButton(onClick = { simulate = null }) { Text("Cancel") } })
     }
 
+    needsContact?.let { id ->
+        NoDesignatedPersonDialog(onDismiss = { needsContact = null }, onAdd = {
+            needsContact = null
+            onAlertCommunication(id)
+        })
+    }
+
     viewing?.let { alert ->
+        val content = presentAlert(alert, readingsById[alert.vitalId], preferences)
         AlertDialog(
             onDismissRequest = { viewing = null },
-            title = { Text(AlertHandoff.title(alert.type)) },
+            title = { AlertHeading(content.title) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(alertDate(alert.createdAt), style = MaterialTheme.typography.bodySmall)
-                    Text(alertIndicator(alert.type))
-                    Text(alert.message)
-                    TextButton(onClick = { viewing = null; onAlertCommunication(alert.alertId) }) { Text("Contact someone about this alert") }
+                    content.recorded?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                    Text(content.guidance)
+                    TextButton(onClick = { viewing = null; notifyPerson(alert.alertId) }) { Text("Notify designated person") }
                     if (viewingLog.isEmpty()) {
                         Text("No contact attempts are logged for this alert.", style = MaterialTheme.typography.bodySmall)
                     }
@@ -220,7 +216,7 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, o
                     }) { Text("Acknowledge") }
                 }
             },
-            dismissButton = { TextButton(onClick = { viewing = null }) { Text("Exit") } }
+            dismissButton = { TextButton(onClick = { viewing = null }) { Text("Close") } }
         )
     }
 }

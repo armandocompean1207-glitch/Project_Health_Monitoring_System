@@ -43,9 +43,11 @@ import com.cse3310.projecthealthmonitoringsystem.data.entity.Weight
         Profile::class,
         Specialty::class,
         Doctor::class,
+        com.cse3310.projecthealthmonitoringsystem.data.entity.Pharmacy::class,
         DoctorVisit::class,
         Medication::class,
         DoseLog::class,
+        com.cse3310.projecthealthmonitoringsystem.data.entity.DoseCorrection::class,
         AuditLog::class,
         VitalType::class,
         VitalSign::class,
@@ -56,9 +58,11 @@ import com.cse3310.projecthealthmonitoringsystem.data.entity.Weight
         Designee::class,
         Alert::class,
         CommunicationLog::class,
-        ConflictRule::class
+        ConflictRule::class,
+        com.cse3310.projecthealthmonitoringsystem.data.entity.Vaccination::class
     ],
-    version = 3,
+    views = [com.cse3310.projecthealthmonitoringsystem.data.entity.EffectiveDoseLog::class],
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -75,12 +79,15 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun alertDao(): AlertDao
     abstract fun communicationLogDao(): CommunicationLogDao
     abstract fun searchDao(): SearchDao
+    abstract fun vaccinationDao(): com.cse3310.projecthealthmonitoringsystem.data.dao.VaccinationDao
 
     /** Creates the tamper-protection triggers and seed rows on first create. */
     class Callback(private val seedDebugUser: Boolean) : RoomDatabase.Callback() {
         override fun onCreate(db: SupportSQLiteDatabase) {
             DatabaseTriggers.create(db)
             DatabaseTriggers.createMedicationTimesAudit(db)
+            ProviderPharmacySchema.constraints(db)
+            DoseCorrectionSchema.constraints(db)
             SeedData.insert(db, includeDebugUser = seedDebugUser)
         }
 
@@ -104,6 +111,43 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE Designee ADD COLUMN contactMethodsMask INTEGER")
+                db.execSQL("ALTER TABLE Designee ADD COLUMN automaticSmsConsent INTEGER")
+            }
+        }
+
+        val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) = ProviderPharmacySchema.migrate(db)
+        }
+
+        val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) = DoseCorrectionSchema.migrate(db)
+        }
+
+        val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""CREATE TABLE IF NOT EXISTS Vaccination (
+                    vaccinationId INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    userId TEXT NOT NULL, name TEXT NOT NULL, receivedDate TEXT NOT NULL,
+                    doseNumber INTEGER, providerOrPharmacy TEXT NOT NULL, location TEXT NOT NULL,
+                    nextDoseDate TEXT, notes TEXT NOT NULL, reminderEnabled INTEGER NOT NULL,
+                    reminderNotifiedFor TEXT,
+                    FOREIGN KEY(userId) REFERENCES User(userId) ON UPDATE NO ACTION ON DELETE CASCADE)""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_Vaccination_userId ON Vaccination(userId)")
+            }
+        }
+
+        val MIGRATION_7_8 = object : androidx.room.migration.Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE DoctorVisit ADD COLUMN reminderMask INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE DoctorVisit ADD COLUMN reminderSentMask INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE DoctorVisit ADD COLUMN reminderVersion INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE DoctorVisit ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         /**
          * Builds the database. Always use this (including in tests) so the triggers and seed data are installed.
          * Call it once, from PhmsApplication.
@@ -114,7 +158,7 @@ abstract class AppDatabase : RoomDatabase() {
             } else {
                 Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
             }
-            return builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3).addCallback(Callback(seedDebugUser)).build()
+            return builder.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).addCallback(Callback(seedDebugUser)).build()
         }
     }
 }

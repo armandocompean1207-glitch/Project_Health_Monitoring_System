@@ -4,7 +4,8 @@ import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsDateInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -19,34 +20,22 @@ import java.util.Locale
 
 @Composable
 internal fun MedicationTreatmentDates(start: Long, end: Long?, ongoing: Boolean, enabled: Boolean,
-    onStart: (Long) -> Unit, onEnd: (Long) -> Unit, onOngoing: (Boolean) -> Unit, showErrors: Boolean) {
-    val context = LocalContext.current
-    val format = SimpleDateFormat("MMM d, yyyy", Locale.US)
-    fun pick(initial: Long, endOfDay: Boolean, selected: (Long) -> Unit) {
-        val cal = Calendar.getInstance().apply { timeInMillis = initial }
-        DatePickerDialog(context, { _, year, month, day ->
-            val chosen = Calendar.getInstance().apply { clear(); set(year, month, day) }.timeInMillis
-            selected(if (endOfDay) MedicationTimes.dayEnd(chosen) else MedicationTimes.dayStart(chosen))
-        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
-    }
-    PhmsOutlinedButton(enabled = enabled, modifier = Modifier.fillMaxWidth(),
-        onClick = { pick(start, false, onStart) }) {
-        Icon(PhmsIcons.Appointments, null)
-        Text("Start date · ${format.format(Date(start))}", Modifier.padding(start = 8.dp))
-    }
+    onStart: (Long) -> Unit, onEnd: (Long) -> Unit, onOngoing: (Boolean) -> Unit, showErrors: Boolean,
+    onValidityChange: (Boolean) -> Unit = {}) {
+    var startValid by remember { mutableStateOf(true) }
+    var endValid by remember { mutableStateOf(true) }
+    SideEffect { onValidityChange(startValid && (ongoing || endValid)) }
+    PhmsDateInput(start, { it?.let { value -> onStart(MedicationTimes.dayStart(value)) } },
+        "Start date", enabled = enabled, onValidityChange = { startValid = it })
     Row(verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = ongoing, onCheckedChange = onOngoing, enabled = enabled)
         Text("Ongoing medication", style = MaterialTheme.typography.bodyLarge)
     }
-    PhmsOutlinedButton(enabled = enabled && !ongoing, modifier = Modifier.fillMaxWidth(),
-        onClick = { pick(end ?: start, true, onEnd) }) {
-        Icon(PhmsIcons.Appointments, null)
-        Text(if (ongoing) "End date · Ongoing" else end?.let { "End date · ${format.format(Date(it))}" } ?: "Choose end date",
-            Modifier.padding(start = 8.dp))
-    }
+    PhmsDateInput(if (ongoing) null else end, { it?.let { value -> onEnd(MedicationTimes.dayEnd(value)) } },
+        "End date", enabled = enabled && !ongoing, required = !ongoing, minDate = start,
+        onValidityChange = { endValid = it })
     if (showErrors && !ongoing && (end == null || end < start)) {
-        Text(if (end == null) "Choose an end date." else "End date cannot be before start date.",
-            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        Text("Choose an end date on or after the start date.", color = MaterialTheme.colorScheme.error)
     }
 }
 

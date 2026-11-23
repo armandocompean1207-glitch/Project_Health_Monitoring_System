@@ -39,7 +39,7 @@ abstract class SearchDao {
           AND :from IS NULL AND :to IS NULL
         UNION ALL
         SELECT 'DOCTOR_VISIT' AS kind, v.visitId AS itemId, d.name AS title,
-               v.reason AS subtitle, v.visitAt AS timestamp
+               CASE WHEN v.cancelled = 1 THEN 'Cancelled · ' || v.reason ELSE v.reason END AS subtitle, v.visitAt AS timestamp
         FROM DoctorVisit v JOIN Doctor d ON d.doctorId = v.doctorId AND d.userId = v.userId
         WHERE v.userId = :userId
           AND (d.name LIKE :pattern ESCAPE '\' OR v.reason LIKE :pattern ESCAPE '\' OR v.notes LIKE :pattern ESCAPE '\')
@@ -111,7 +111,7 @@ abstract class SearchDao {
                m.dosage || ' · ' || d.status ||
                CASE WHEN d.recordedAt IS NOT NULL THEN ' · Recorded: ' || d.recordedAt ELSE '' END AS subtitle,
                d.scheduledAt AS timestamp
-        FROM DoseLog d JOIN Medication m ON m.medicationId = d.medicationId AND m.userId = d.userId
+        FROM EffectiveDoseLog d JOIN Medication m ON m.medicationId = d.medicationId AND m.userId = d.userId
         WHERE d.userId = :userId
           AND (m.name LIKE :pattern ESCAPE '\' OR m.dosage LIKE :pattern ESCAPE '\'
                OR d.status LIKE :pattern ESCAPE '\')
@@ -128,7 +128,7 @@ abstract class SearchDao {
         """
         SELECT v.*, d.name AS doctorName
         FROM DoctorVisit v JOIN Doctor d ON d.doctorId = v.doctorId AND d.userId = v.userId
-        WHERE v.userId = :userId AND v.visitAt >= :now
+        WHERE v.userId = :userId AND v.cancelled = 0 AND v.visitAt >= :now
         ORDER BY v.visitAt ASC LIMIT 1
         """
     )
@@ -138,7 +138,7 @@ abstract class SearchDao {
         """
         SELECT v.*, d.name AS doctorName
         FROM DoctorVisit v JOIN Doctor d ON d.doctorId = v.doctorId AND d.userId = v.userId
-        WHERE v.userId = :userId AND v.visitAt < :now
+        WHERE v.userId = :userId AND v.cancelled = 0 AND v.visitAt < :now
         ORDER BY v.visitAt DESC LIMIT 1
         """
     )

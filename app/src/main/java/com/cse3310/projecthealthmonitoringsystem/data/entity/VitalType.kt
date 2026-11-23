@@ -22,10 +22,12 @@ data class VitalType(
 ) {
     /** True when [value] (or [secondaryValue], for two-number types) is outside the normal range. */
     fun isAbnormal(value: Double, secondaryValue: Double? = null): Boolean {
-        if (value < normalMin || value > normalMax) return true
+        // Unit round trips can differ by a few floating-point bits at an inclusive boundary.
+        val epsilon = 1e-9
+        if (value < normalMin - epsilon || value > normalMax + epsilon) return true
         if (secondaryValue != null) {
-            if (secondaryMin != null && secondaryValue < secondaryMin) return true
-            if (secondaryMax != null && secondaryValue > secondaryMax) return true
+            if (secondaryMin != null && secondaryValue < secondaryMin - epsilon) return true
+            if (secondaryMax != null && secondaryValue > secondaryMax + epsilon) return true
         }
         return false
     }

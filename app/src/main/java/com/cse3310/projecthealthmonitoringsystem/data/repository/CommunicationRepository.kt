@@ -39,8 +39,15 @@ class CommunicationRepository(
         val v = com.cse3310.projecthealthmonitoringsystem.validation.HealthValidation
         (v.name(contact.name, "Contact name") ?: v.phone(contact.phone) ?: v.email(contact.email))
             ?.let { throw IllegalArgumentException(it) }
-        require(if (contact.preferredMethod == ContactMethod.EMAIL) contact.email.isNotBlank() else contact.phone.isNotBlank()) {
-            if (contact.preferredMethod == ContactMethod.EMAIL) "Enter an email address for this contact." else "Enter a phone number for this contact."
+        require(contact.contactMethodsMask == null || contact.contactMethodsMask in 1..7) { "Select at least one contact method." }
+        val methods = contact.selectedMethods()
+        require(methods.isNotEmpty()) { "Select at least one contact method." }
+        require(ContactMethod.EMAIL !in methods || contact.email.isNotBlank()) { "Enter an email address for this contact." }
+        require(methods.none { it == ContactMethod.SMS || it == ContactMethod.CALL } || contact.phone.isNotBlank()) {
+            "Enter a phone number for texts and calls."
+        }
+        require(contact.automaticSmsConsent != true || ContactMethod.SMS in methods) {
+            "Select Text before allowing automatic SMS alerts."
         }
     }
 

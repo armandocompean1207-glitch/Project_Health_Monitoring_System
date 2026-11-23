@@ -9,7 +9,7 @@ object DoseTimes {
 
     const val DAY_MILLIS = 24L * 60 * 60 * 1000
 
-    fun formatTime(millis: Long): String = SimpleDateFormat("MMM d, h:mm a", Locale.US).format(Date(millis))
+    fun formatTime(millis: Long): String = SimpleDateFormat("MM/dd/yyyy · h:mm a", Locale.US).format(Date(millis))
 
     fun parseTime(text: String): Pair<Int, Int>? {
         val parts = text.trim().split(":")

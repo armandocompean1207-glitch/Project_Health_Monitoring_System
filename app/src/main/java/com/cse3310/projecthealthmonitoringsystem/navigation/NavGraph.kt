@@ -57,6 +57,7 @@ object AppRoutes {
     const val COMMUNICATION_PATTERN = "communication?alertId={alertId}"
     const val ACCOUNTS = "accounts"
     const val APPOINTMENTS = "appointments"
+    const val APPOINTMENT_DETAIL = "appointment/{visitId}"
     const val HEALTH_GUIDE = "healthGuide"
 
     val moreRoutes = setOf(
@@ -74,6 +75,7 @@ object AppRoutes {
         COMMUNICATION_PATTERN,
         ACCOUNTS,
         APPOINTMENTS,
+        APPOINTMENT_DETAIL,
         HEALTH_GUIDE
     )
 }
@@ -138,7 +140,8 @@ fun AppNavGraph(
                 onNotesClick = { navController.navigate(AppRoutes.NOTES) },
                 onMoreClick = { navController.navigate(AppRoutes.SETTINGS) },
                 onSearchClick = { navController.navigate(AppRoutes.SEARCH) },
-                onMedicalFormsClick = { navController.navigate(AppRoutes.DATA_MAINTENANCE) }
+                onMedicalFormsClick = { navController.navigate(AppRoutes.DATA_MAINTENANCE) },
+                onNotifyAlert = { id -> navController.navigate("${AppRoutes.COMMUNICATION}?alertId=$id") }
             )
         }
 
@@ -147,7 +150,9 @@ fun AppNavGraph(
         }
 
         composable(AppRoutes.HEALTH) {
-            com.cse3310.projecthealthmonitoringsystem.vitals.VitalSignsRoute()
+            com.cse3310.projecthealthmonitoringsystem.vitals.VitalSignsRoute(
+                onNotifyContact = { id -> navController.navigate("${AppRoutes.COMMUNICATION}?alertId=$id") }
+            )
         }
 
         composable(AppRoutes.SETTINGS) {
@@ -188,6 +193,12 @@ fun AppNavGraph(
             )
         }
 
+        composable(AppRoutes.APPOINTMENT_DETAIL,
+            arguments = listOf(navArgument("visitId") { type = NavType.LongType })
+        ) { entry ->
+            DataMaintenanceScreen(onBack = { navController.popBackStack() }, initialAppointments = true,
+                initialVisitId = entry.arguments?.getLong("visitId"))
+        }
         composable(AppRoutes.APPOINTMENTS) {
             DataMaintenanceScreen(
                 onBack = { navController.popBackStack() },
@@ -302,10 +313,10 @@ private fun MoreScreen(
                 PhmsIcons.Search
             ),
             MoreMenuItem(
-                "Care details",
-                "Manage your doctors, visits and health options.",
+                "Providers & pharmacies",
+                "Manage your providers, pharmacies, visits and health options.",
                 AppRoutes.DATA_MAINTENANCE,
-                PhmsIcons.DataMaintenance
+                PhmsIcons.Providers
             ),
             MoreMenuItem(
                 "Communication",
@@ -322,6 +333,10 @@ private fun MoreScreen(
         )
     )
 
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
+        primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFDF48),
+        onPrimaryContainer = androidx.compose.ui.graphics.Color.Black,
+        onSurfaceVariant = androidx.compose.ui.graphics.Color.Black)) {
     PhmsPage(modifier = modifier) {
         com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsScreenHeader(
             "More", "Your care, records and personal details.", PhmsIcons.More)
@@ -342,6 +357,7 @@ private fun MoreScreen(
                 }
             }
         }
+    }
     }
 }
 

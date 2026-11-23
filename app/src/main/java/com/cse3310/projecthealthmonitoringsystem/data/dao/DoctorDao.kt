@@ -45,6 +45,30 @@ abstract class DoctorDao {
     )
     abstract fun observeDoctors(userId: String): Flow<List<DoctorWithSpecialty>>
 
+    // ---- Pharmacies, maintained by the same care-team module ----
+
+    @Insert
+    abstract suspend fun insertPharmacy(pharmacy: com.cse3310.projecthealthmonitoringsystem.data.entity.Pharmacy): Long
+
+    @Update
+    protected abstract suspend fun updatePharmacyRow(pharmacy: com.cse3310.projecthealthmonitoringsystem.data.entity.Pharmacy): Int
+
+    @Transaction
+    open suspend fun updatePharmacy(userId: String, pharmacy: com.cse3310.projecthealthmonitoringsystem.data.entity.Pharmacy): Boolean =
+        pharmacy.userId == userId && getPharmacy(userId, pharmacy.pharmacyId) != null && updatePharmacyRow(pharmacy) > 0
+
+    @Query("SELECT * FROM Pharmacy WHERE userId = :userId ORDER BY isPreferred DESC, name COLLATE NOCASE")
+    abstract fun observePharmacies(userId: String): Flow<List<com.cse3310.projecthealthmonitoringsystem.data.entity.Pharmacy>>
+
+    @Query("SELECT * FROM Pharmacy WHERE userId = :userId AND pharmacyId = :pharmacyId")
+    abstract suspend fun getPharmacy(userId: String, pharmacyId: Long): com.cse3310.projecthealthmonitoringsystem.data.entity.Pharmacy?
+
+    @Query("DELETE FROM Pharmacy WHERE userId = :userId AND pharmacyId = :pharmacyId")
+    abstract suspend fun deletePharmacy(userId: String, pharmacyId: Long): Int
+
+    @Query("UPDATE Pharmacy SET isPreferred = 1 WHERE userId = :userId AND pharmacyId = :pharmacyId")
+    abstract suspend fun preferPharmacy(userId: String, pharmacyId: Long): Int
+
     // ---- DoctorVisit ----
 
     @Insert
@@ -54,11 +78,18 @@ abstract class DoctorDao {
     protected abstract suspend fun updateVisitRow(visit: DoctorVisit): Int
 
     @Transaction
-    open suspend fun updateVisit(userId: String, visit: DoctorVisit): Boolean =
-        visit.userId == userId &&
-            visitOwned(userId, visit.visitId) &&
-            doctorOwned(userId, visit.doctorId) &&
-            updateVisitRow(visit) > 0
+    open suspend fun updateVisit(userId: String, visit: DoctorVisit): Boolean {
+        if (visit.userId != userId || !doctorOwned(userId, visit.doctorId)) return false
+        val original = getVisit(userId, visit.visitId) ?: return false
+        val changed = visit.copy(reminderVersion = original.reminderVersion + 1,
+            reminderSentMask = if (original.visitAt == visit.visitAt) original.reminderSentMask and visit.reminderMask else 0)
+        return updateVisitRow(changed) > 0
+    }
+
+    @Query("""UPDATE DoctorVisit SET reminderSentMask = reminderSentMask | :bit
+        WHERE userId=:owner AND visitId=:id AND reminderVersion=:version
+        AND visitAt=:at AND cancelled=0 AND (reminderMask & :bit)!=0 AND (reminderSentMask & :bit)=0""")
+    abstract suspend fun claimVisitReminder(owner: String, id: Long, version: Long, at: Long, bit: Int): Int
 
     @Query("DELETE FROM DoctorVisit WHERE visitId = :visitId AND userId = :userId")
     abstract suspend fun deleteVisit(userId: String, visitId: Long): Int

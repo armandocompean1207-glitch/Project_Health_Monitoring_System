@@ -7,7 +7,7 @@ import java.util.Date
 import java.util.Locale
 
 internal enum class MedicationIntakeState(val label: String) {
-    SCHEDULED("Scheduled"), DUE("Due"), TAKEN("Taken"), MISSED("Missed"),
+    SCHEDULED("Scheduled"), DUE("Due"), TAKEN("Taken"), MISSED("Missed"), SKIPPED("Skipped"),
     OVERDUE("Overdue"), NOT_RECORDED("Not recorded"), UNAVAILABLE("Unavailable")
 }
 
@@ -16,6 +16,7 @@ internal fun medicationIntakeState(status: DoseStatus?, scheduledAt: Long, now: 
     when {
         status == DoseStatus.TAKEN -> MedicationIntakeState.TAKEN
         status == DoseStatus.MISSED -> MedicationIntakeState.MISSED
+        status == DoseStatus.SKIPPED -> MedicationIntakeState.SKIPPED
         now < scheduledAt -> MedicationIntakeState.SCHEDULED
         scheduledAt <= now - MonitoringRepository.DEFAULT_MISSED_WINDOW_MS ->
             if (status == DoseStatus.SCHEDULED) MedicationIntakeState.OVERDUE else MedicationIntakeState.NOT_RECORDED
@@ -24,4 +25,4 @@ internal fun medicationIntakeState(status: DoseStatus?, scheduledAt: Long, now: 
     }
 
 internal fun intakeDateTime(at: Long): String =
-    SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.US).format(Date(at))
+    SimpleDateFormat("MM/dd/yyyy · h:mm a", Locale.US).format(Date(at))

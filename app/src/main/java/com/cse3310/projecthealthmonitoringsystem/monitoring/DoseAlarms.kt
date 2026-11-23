@@ -151,6 +151,9 @@ class DoseRebootReceiver : BroadcastReceiver() {
             try {
                 app.medicationRepository.getActiveMedications(userId)
                     .forEach { DoseAlarms.scheduleNextReminder(context, it) }
+                try { com.cse3310.projecthealthmonitoringsystem.healthguide.VaccinationReminders.restore(context, userId) }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (failure: Exception) { android.util.Log.w("PHMS", "Optional vaccination reminders could not be restored", failure) }
                 app.monitoringRepository.checkMissedDoses(userId)
                     .forEach { AlertHandoff.send(context, it) }
             } finally {

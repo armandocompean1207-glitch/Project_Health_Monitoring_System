@@ -22,12 +22,12 @@ fun HealthGuideScreen(onBack: () -> Unit, onVitals: () -> Unit, onMedicines: () 
     val medicines by remember(id) { app.medicationRepository.observeActiveMedications(id) }.collectAsState(emptyList())
     val visits by remember(id) { app.maintenanceRepository.observeDoctorVisits(id) }.collectAsState(emptyList())
     val now = System.currentTimeMillis()
-    val upcoming = visits.count { it.visit.visitAt >= now }
+    val upcoming = visits.count { !it.visit.cancelled && it.visit.visitAt >= now }
     PhmsPage {
         PhmsScreenHeader("Health Guide", "A few simple ways to keep your care organized.", PhmsIcons.WellGuide, onBack)
         profile?.annualCheckupAt?.let { at ->
             PhmsActionCard("Annual checkup",
-                "Saved date: " + SimpleDateFormat("MMM d, yyyy", locale).format(Date(at)),
+                "Saved date: " + SimpleDateFormat("MM/dd/yyyy", locale).format(Date(at)),
                 PhmsIcons.Appointments, onCheckups)
         }
         PhmsActionCard("Your checkups", "Review annual visits or set your next checkup date.", PhmsIcons.WellGuide, onCheckups)
@@ -42,6 +42,7 @@ fun HealthGuideScreen(onBack: () -> Unit, onVitals: () -> Unit, onMedicines: () 
             if (upcoming == 0) "Keep your doctor's appointment details in one place." else "$upcoming upcoming appointments.",
             PhmsIcons.Appointments, onAppointments)
         PhmsActionCard("Write down a question", "Keep questions ready for your next visit.", PhmsIcons.Notes, onNotes)
+        VaccinationsSection()
         Text("Follow the advice of your healthcare professional. PHMS does not provide a diagnosis or replace medical care.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

@@ -12,7 +12,6 @@ import androidx.compose.material.icons.automirrored.outlined.Assignment
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material.icons.outlined.PersonOutline
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -45,7 +44,10 @@ fun HomeDashboardScreen(username: String, onUpdateProfileClick: () -> Unit, onMe
     onDietClick: () -> Unit = {}, onWeightClick: () -> Unit = onDietClick,
     onNotesClick: () -> Unit = {}, onMoreClick: () -> Unit = {}, now: Long = System.currentTimeMillis(),
     onSearchClick: () -> Unit = {}, onAlertSettingsClick: () -> Unit = onAlertsClick,
-    onMedicalFormsClick: () -> Unit = {}) {
+    onMedicalFormsClick: () -> Unit = {},
+    onAlertDetails: (Long) -> Unit = { onAlertsClick() },
+    onAcknowledgeAlert: (Long) -> Unit = {},
+    onNotifyAlert: (Long) -> Unit = { onAlertsClick() }) {
     val scheme = MaterialTheme.colorScheme.copy(primary = HomePalette.Yellow, onPrimary = HomePalette.Ink,
         primaryContainer = HomePalette.Yellow, onPrimaryContainer = HomePalette.Ink,
         background = HomePalette.Background, onBackground = HomePalette.Ink,
@@ -73,7 +75,7 @@ fun HomeDashboardScreen(username: String, onUpdateProfileClick: () -> Unit, onMe
                         val hour = Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.HOUR_OF_DAY)
                         Text(homeGreeting(hour) + firstName.takeIf { it.isNotBlank() }?.let { ", $it" }.orEmpty(),
                             style = MaterialTheme.typography.headlineLarge)
-                        Text(SimpleDateFormat("EEEE, MMM d", java.util.Locale.US).format(Date(now)),
+                        Text(SimpleDateFormat("MM/dd/yyyy", java.util.Locale.US).format(Date(now)),
                             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
                     }
                     Spacer(Modifier.height(4.dp))
@@ -84,28 +86,31 @@ fun HomeDashboardScreen(username: String, onUpdateProfileClick: () -> Unit, onMe
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     HomeCardTitle("Alerts")
                                     Text(if (summary.activeAlerts > 0) "${summary.activeAlerts} active ${if (summary.activeAlerts == 1) "alert" else "alerts"}"
-                                        else if (summary.alert != null) summary.alert.title else "No alerts right now.",
+                                        else "No active alerts.",
                                         style = MaterialTheme.typography.bodyLarge)
                                 }
                                 HomeTextAction("View alerts", onAlertsClick)
                             }
                             summary.alert?.let { alert ->
-                                val severity = if (alert.isCritical) MaterialTheme.colorScheme.error
-                                    else com.cse3310.projecthealthmonitoringsystem.ui.theme.PhmsWarning
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Icon(Icons.Outlined.WarningAmber, "Health alert", tint = severity, modifier = Modifier.size(24.dp))
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text(alert.title, style = MaterialTheme.typography.titleMedium, color = severity)
-                                        Text(alert.message, style = MaterialTheme.typography.bodyMedium)
-                                    }
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    com.cse3310.projecthealthmonitoringsystem.monitoring.AlertHeading(alert.title)
+                                    Text(alert.message, style = MaterialTheme.typography.bodyMedium)
+                                    alert.recorded?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                                    if (alert.alertId > 0) com.cse3310.projecthealthmonitoringsystem.monitoring.AlertActions(
+                                        onDetails = { onAlertDetails(alert.alertId) },
+                                        onAcknowledge = { onAcknowledgeAlert(alert.alertId) },
+                                        onNotify = { onNotifyAlert(alert.alertId) })
                                 }
                             }
-                            HorizontalDivider(color = HomePalette.Border)
+                        }
+                    }
+                    HomeCard() {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 HomeIcon(PhmsIcons.Appointments)
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     HomeCardTitle("Appointments")
-                                    Text(summary.nextAppointment?.providerName ?: "No upcoming appointments.", style = MaterialTheme.typography.bodyLarge)
+                                    Text(summary.nextAppointment?.let { "With ${it.providerName}" } ?: "No upcoming appointments.", style = MaterialTheme.typography.bodyLarge)
                                     summary.nextAppointment?.let { Text(it.dateAndTime, style = MaterialTheme.typography.bodyMedium) }
                                 }
                             }
@@ -138,7 +143,7 @@ fun HomeDashboardScreen(username: String, onUpdateProfileClick: () -> Unit, onMe
                         HomeTextAction("View all", onVitalsClick)
                     }
                     val readings = listOf(
-                        Triple("Blood pressure", summary.bloodPressure, Icons.Outlined.FavoriteBorder),
+                        Triple("Blood pressure", summary.bloodPressure, PhmsIcons.BloodPressure),
                         Triple("Heart rate", summary.heartRate, Icons.Outlined.MonitorHeart),
                         Triple("Blood glucose", summary.glucose, PhmsIcons.Glucose),
                         Triple("Blood oxygen", summary.oxygen, Icons.Outlined.Air))

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Medication
 import androidx.compose.material.icons.outlined.MonitorHeart
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.MonitorWeight
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.NotificationsNone
@@ -46,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
 /** Outlined Material icons used consistently across the app shell and feature cards. */
@@ -57,7 +59,7 @@ object PhmsIcons {
     val More = Icons.Outlined.MoreHoriz
     val PersonalInformation = Icons.Outlined.Person
     val WellGuide = Icons.Outlined.HealthAndSafety
-    val BloodPressure = Icons.Outlined.MonitorHeart
+    val BloodPressure = Icons.Outlined.Speed
     val Glucose = Icons.Outlined.WaterDrop
     val Weight = Icons.Outlined.MonitorWeight
     val Appointments = Icons.Outlined.CalendarMonth
@@ -66,6 +68,30 @@ object PhmsIcons {
     val Diet = Icons.Outlined.Restaurant
     val Search = Icons.Outlined.Search
     val DataMaintenance = Icons.Outlined.Settings
+    val Providers: ImageVector by lazy {
+        ImageVector.Builder("Stethoscope", 24.dp, 24.dp, 24f, 24f).apply {
+            path(
+                fill = null,
+                stroke = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Black),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round,
+                strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round
+            ) {
+                moveTo(5f, 3f); lineTo(3f, 3f); lineTo(3f, 8f)
+                curveTo(3f, 14.7f, 13f, 14.7f, 13f, 8f)
+                lineTo(13f, 3f); lineTo(11f, 3f)
+                moveTo(5f, 2f); lineTo(5f, 5f)
+                moveTo(11f, 2f); lineTo(11f, 5f)
+                moveTo(8f, 13f); lineTo(8f, 16f)
+                curveTo(8f, 22.5f, 19f, 22.5f, 19f, 16f)
+                lineTo(19f, 14f)
+                moveTo(21.5f, 11.5f)
+                arcTo(2.5f, 2.5f, 0f, true, true, 16.5f, 11.5f)
+                arcTo(2.5f, 2.5f, 0f, true, true, 21.5f, 11.5f)
+                close()
+            }
+        }.build()
+    }
     val Communication = Icons.AutoMirrored.Outlined.Chat
     val Next = Icons.Outlined.ChevronRight
     val Account = Icons.Outlined.AccountCircle
@@ -76,13 +102,14 @@ object PhmsIcons {
 @Composable
 fun PhmsPage(
     modifier: Modifier = Modifier,
+    scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .imePadding()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         content = content
@@ -224,14 +251,14 @@ fun PhmsIconBadge(
         modifier = modifier
             .size(40.dp)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer)
+            .background(androidx.compose.ui.graphics.Color(0xFFFFDF48))
             .padding(9.dp),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            tint = androidx.compose.ui.graphics.Color(0xFF111827),
             modifier = Modifier.fillMaxSize()
         )
     }

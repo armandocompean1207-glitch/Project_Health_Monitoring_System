@@ -29,6 +29,14 @@ abstract class VitalSignDao {
     @Query("SELECT EXISTS(SELECT 1 FROM VitalSign WHERE vitalId = :vitalId AND userId = :userId)")
     abstract suspend fun vitalOwned(userId: String, vitalId: Long): Boolean
 
+    @Query("""
+        SELECT * FROM VitalSign WHERE userId = :userId AND vitalTypeId = :typeId
+        AND value = :value AND secondaryValue IS :secondary AND recordedAt = :recordedAt AND note = :note
+        LIMIT 1
+    """)
+    abstract suspend fun matchingSubmission(userId: String, typeId: Long, value: Double, secondary: Double?,
+        recordedAt: Long, note: String): VitalSign?
+
     @Query("SELECT * FROM VitalSign WHERE vitalId = :vitalId AND userId = :userId")
     abstract suspend fun getVitalSign(userId: String, vitalId: Long): VitalSign?
 

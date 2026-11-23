@@ -31,7 +31,13 @@ class PhmsApplication : Application() {
 
     val authRepository by lazy { AuthRepository(database.userDao(), transactionRunner) }
 
-    val maintenanceRepository by lazy { MaintenanceRepository(database.doctorDao(), database.lookupDao()) }
+    val maintenanceRepository by lazy {
+        MaintenanceRepository(database.doctorDao(), database.lookupDao()) { owner, id ->
+            try { com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentReminders.sync(this, owner, id) }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (failure: Exception) { android.util.Log.w("PHMS", "Appointment reminder scheduling unavailable", failure) }
+        }
+    }
 
     val communicationRepository by lazy {
         CommunicationRepository(database.designeeDao(), database.communicationLogDao())
@@ -52,4 +58,7 @@ class PhmsApplication : Application() {
     val dietRepository by lazy { DietRepository(database.dietDao(), transactionRunner) }
 
     val notesRepository by lazy { NotesRepository(database.noteDao()) }
+    val vaccinationRepository by lazy {
+        com.cse3310.projecthealthmonitoringsystem.data.repository.VaccinationRepository(database.vaccinationDao())
+    }
 }

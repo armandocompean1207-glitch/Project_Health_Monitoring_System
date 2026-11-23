@@ -2,8 +2,6 @@ package com.cse3310.projecthealthmonitoringsystem.home
 
 import android.content.Context
 import androidx.compose.runtime.*
-import com.cse3310.projecthealthmonitoringsystem.data.entity.Alert
-import com.cse3310.projecthealthmonitoringsystem.data.entity.AlertType
 import com.cse3310.projecthealthmonitoringsystem.data.entity.DoseStatus
 import com.cse3310.projecthealthmonitoringsystem.monitoring.CurrentUser
 import com.cse3310.projecthealthmonitoringsystem.monitoring.DoseAlarms
@@ -11,6 +9,21 @@ import com.cse3310.projecthealthmonitoringsystem.monitoring.DoseTimes
 import com.cse3310.projecthealthmonitoringsystem.monitoring.phms
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import com.cse3310.projecthealthmonitoringsystem.monitoring.presentAlert
+import com.cse3310.projecthealthmonitoringsystem.monitoring.AlertHeading
+import com.cse3310.projecthealthmonitoringsystem.monitoring.AlertActions
+import com.cse3310.projecthealthmonitoringsystem.monitoring.NoDesignatedPersonDialog
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsTextButton
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -59,6 +72,8 @@ data class HomeAlert(
     val title: String,
     val message: String,
     val isCritical: Boolean,
+    val alertId: Long = 0,
+    val recorded: String? = null,
 )
 
 /** Home observes the same user-scoped repositories used by the feature screens. */
@@ -75,6 +90,7 @@ fun HomeDashboardRoute(
     onMoreClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onMedicalFormsClick: () -> Unit = {},
+    onNotifyAlert: (Long) -> Unit = { onAlertsClick() },
 ) {
     val context = LocalContext.current
     val app = context.phms()
@@ -85,7 +101,25 @@ fun HomeDashboardRoute(
     val medications by app.medicationRepository.observeActiveMedications(userId).collectAsState(initial = emptyList())
     val vitalReadings by app.vitalsRepository.observeVitalSigns(userId).collectAsState(initial = emptyList())
     val visits by app.maintenanceRepository.observeDoctorVisits(userId).collectAsState(initial = emptyList())
-    val alerts by app.monitoringRepository.observeUnacknowledgedAlerts(userId).collectAsState(initial = emptyList())
+    val alerts by remember(userId) { app.monitoringRepository.observeUnacknowledgedAlerts(userId) }.collectAsState(initial = emptyList())
+    val contacts by remember(userId) { app.communicationRepository.observeDesignees(userId) }.collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    var viewingAlertId by remember(userId) { mutableStateOf<Long?>(null) }
+    var needsContact by remember(userId) { mutableStateOf<Long?>(null) }
+    fun notifyPerson(id: Long) {
+        if (contacts.isEmpty()) needsContact = id else onNotifyAlert(id)
+    }
+    fun acknowledge(id: Long) {
+        scope.launch {
+            try {
+                app.monitoringRepository.acknowledgeAlert(userId, id)
+                viewingAlertId = null
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) {
+                android.widget.Toast.makeText(context, "Unable to acknowledge this alert.", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     val now by produceState(System.currentTimeMillis()) {
         while (true) { delay(60_000); value = System.currentTimeMillis() }
     }
@@ -129,7 +163,7 @@ fun HomeDashboardRoute(
         return HomeVitalRecord(
             displayValue = value,
             unit = latest.unit,
-            recordedAt = SimpleDateFormat("MMM d", Locale.US)
+            recordedAt = SimpleDateFormat("MM/dd/yyyy", Locale.US)
                 .format(Date(latest.vital.recordedAt)),
             recentValues = matches.take(7).asReversed().map { it.vital.value.toFloat() },
             isAbnormal = latest.vital.isAbnormal,
@@ -137,12 +171,12 @@ fun HomeDashboardRoute(
     }
 
     val nextAppointment = visits
-        .filter { it.visit.visitAt >= System.currentTimeMillis() }
+        .filter { !it.visit.cancelled && it.visit.visitAt >= System.currentTimeMillis() }
         .minByOrNull { it.visit.visitAt }
         ?.let { visit ->
             HomeAppointment(
                 providerName = visit.doctorName,
-                dateAndTime = SimpleDateFormat("EEE, MMM d · h:mm a", Locale.US)
+                dateAndTime = SimpleDateFormat("MM/dd/yyyy · h:mm a", Locale.US)
                     .format(Date(visit.visit.visitAt)),
             )
         }
@@ -157,12 +191,15 @@ fun HomeDashboardRoute(
         upcomingVisits = visits.count { it.visit.visitAt >= now },
         activeAlerts = alerts.size,
         nextAppointment = nextAppointment,
-        alert = alerts.firstOrNull()?.toHomeAlert(),
+        alert = alerts.firstOrNull()?.let { alert ->
+            val content = presentAlert(alert, vitalReadings.firstOrNull { it.vital.vitalId == alert.vitalId }, preferences)
+            HomeAlert(content.title, content.guidance, content.vital, alert.alertId, content.recorded)
+        },
         calories = calories,
         calorieGoal = calorieGoal,
         mealCount = meals.size,
-        latestWeight = latestWeight?.let { "${formatReading(com.cse3310.projecthealthmonitoringsystem.data.repository.DietRepository.convert(it.value, it.unit, preferences.weightUnit))} ${preferences.weightUnit.name.lowercase()}" },
-        weightDate = latestWeight?.let { SimpleDateFormat("MMM d", Locale.US).format(Date(it.recordedAt)) },
+        latestWeight = latestWeight?.let { "${formatReading(com.cse3310.projecthealthmonitoringsystem.data.repository.DietRepository.convert(it.value, it.unit, preferences.weightUnit))} ${preferences.weightLabel}" },
+        weightDate = latestWeight?.let { SimpleDateFormat("MM/dd/yyyy", Locale.US).format(Date(it.recordedAt)) },
         weightHistory = latestWeight?.let { latest ->
             weights.filter { it.recordedAt in (now - 7 * DoseTimes.DAY_MILLIS)..now }.sortedBy { it.recordedAt }.map {
                 com.cse3310.projecthealthmonitoringsystem.data.repository.DietRepository.convert(it.value, it.unit, preferences.weightUnit).toFloat()
@@ -177,6 +214,9 @@ fun HomeDashboardRoute(
         onVitalsClick = onVitalsClick,
         onAppointmentsClick = onAppointmentsClick,
         onAlertsClick = onAlertsClick,
+        onAlertDetails = { viewingAlertId = it },
+        onAcknowledgeAlert = { acknowledge(it) },
+        onNotifyAlert = { notifyPerson(it) },
         summary = summary,
         onDietClick = onDietClick,
         onWeightClick = onWeightClick,
@@ -197,17 +237,28 @@ fun HomeDashboardRoute(
         },
         now = now,
     )
+    needsContact?.let { id ->
+        NoDesignatedPersonDialog(onDismiss = { needsContact = null }, onAdd = {
+            needsContact = null
+            onNotifyAlert(id)
+        })
+    }
+    alerts.firstOrNull { it.alertId == viewingAlertId }?.let { alert ->
+        val content = presentAlert(alert, vitalReadings.firstOrNull { it.vital.vitalId == alert.vitalId }, preferences)
+        AlertDialog(onDismissRequest = { viewingAlertId = null }, title = { AlertHeading(content.title) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    content.recorded?.let { Text(it) }
+                    Text(content.guidance)
+                    AlertActions(null, { acknowledge(alert.alertId) }) {
+                        viewingAlertId = null
+                        notifyPerson(alert.alertId)
+                    }
+                }
+            },
+            confirmButton = { PhmsTextButton(onClick = { viewingAlertId = null }) { Text("Close") } })
+    }
 }
-
-private fun Alert.toHomeAlert() = HomeAlert(
-    title = when (type) {
-        AlertType.ABNORMAL_VITAL -> "Reading needs attention"
-        AlertType.MISSED_DOSE -> "Missed medication"
-        AlertType.CONFLICT -> "Medication alert"
-    },
-    message = message,
-    isCritical = type == AlertType.ABNORMAL_VITAL,
-)
 
 private fun formatReading(value: Double): String =
     if (value % 1.0 == 0.0) value.toLong().toString() else "%.1f".format(Locale.US, value)

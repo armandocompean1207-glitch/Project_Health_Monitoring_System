@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsOutlinedButton as OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -21,13 +21,19 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-internal fun VisitTimeField(value: String, onChange: (String) -> Unit) {
+internal fun VisitTimeField(value: String, onValidityChange: (Boolean) -> Unit = {}, onChange: (String) -> Unit) {
     val context = LocalContext.current
-    OutlinedButton(onClick = {
-        pickVisitTime(context, parseVisitTime(value) ?: System.currentTimeMillis()) { onChange(visitInput(it)) }
-    }, modifier = Modifier.fillMaxWidth()) {
-        Icon(PhmsIcons.Appointments, null)
-        Text(parseVisitTime(value)?.let(::visitDisplay) ?: "Choose date and time", Modifier.padding(start = 8.dp))
+    var dateValid by remember { mutableStateOf(true) }
+    androidx.compose.foundation.layout.Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+        com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsDateInput(parseVisitTime(value),
+            { it?.let { time -> onChange(visitInput(time)) } }, "Appointment date", onValidityChange = { dateValid = it; onValidityChange(it) })
+        OutlinedButton(enabled = dateValid, onClick = {
+            val calendar = Calendar.getInstance().apply { timeInMillis = parseVisitTime(value) ?: System.currentTimeMillis() }
+            TimePickerDialog(context, { _, hour, minute ->
+                calendar.set(Calendar.HOUR_OF_DAY, hour); calendar.set(Calendar.MINUTE, minute)
+                onChange(visitInput(calendar.timeInMillis))
+            }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), false).show()
+        }) { Text(parseVisitTime(value)?.let { SimpleDateFormat("h:mm a", Locale.US).format(Date(it)) } ?: "Choose time") }
     }
 }
 
@@ -35,7 +41,7 @@ internal fun visitInput(time: Long): String =
     SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(time))
 
 internal fun visitDisplay(time: Long): String =
-    SimpleDateFormat("EEE, MMM d, yyyy · h:mm a", Locale.US).format(Date(time))
+    SimpleDateFormat("MM/dd/yyyy · h:mm a", Locale.US).format(Date(time))
 
 internal fun parseVisitTime(text: String): Long? {
     val value = text.trim()
@@ -63,18 +69,3 @@ internal fun rangeError(min: Double?, max: Double?, secondMin: String, secondMax
 
 internal fun isAnnualCheckup(reason: String) = reason.trim().startsWith("Annual checkup", ignoreCase = true)
 
-/** Native pickers use the device's local zone and 12/24-hour preference; no server booking is implied. */
-internal fun pickVisitTime(context: Context, initial: Long, onSelected: (Long) -> Unit) {
-    val calendar = Calendar.getInstance().apply { timeInMillis = initial }
-    DatePickerDialog(context, { _, year, month, day ->
-        calendar.set(year, month, day)
-        TimePickerDialog(context, { _, hour, minute ->
-            calendar.set(Calendar.HOUR_OF_DAY, hour)
-            calendar.set(Calendar.MINUTE, minute)
-            calendar.set(Calendar.SECOND, 0)
-            calendar.set(Calendar.MILLISECOND, 0)
-            onSelected(calendar.timeInMillis)
-        }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE),
-            false).show()
-    }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
-}

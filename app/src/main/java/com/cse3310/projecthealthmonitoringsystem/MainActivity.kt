@@ -37,6 +37,11 @@ import com.cse3310.projecthealthmonitoringsystem.ui.theme.ProjectHealthMonitorin
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentNavigation.accept(intent)
+        if (android.os.Build.VERSION.SDK_INT >= 31) splashScreen.setOnExitAnimationListener { splash ->
+            splash.iconView?.animate()?.scaleX(1.03f)?.scaleY(1.03f)?.setDuration(140L)?.start()
+            splash.animate().alpha(0f).setDuration(140L).withEndAction { splash.remove() }.start()
+        }
         enableEdgeToEdge()
 
         setContent {
@@ -44,6 +49,11 @@ class MainActivity : ComponentActivity() {
                 com.cse3310.projecthealthmonitoringsystem.auth.AccountGate()
             }
         }
+    }
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentNavigation.accept(intent)
     }
 }
 
@@ -54,6 +64,21 @@ fun PhmsApp() {
     val navigationGuard = androidx.compose.runtime.remember { com.cse3310.projecthealthmonitoringsystem.ui.components.NavigationGuard() }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val appointmentRequest = com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentNavigation.request
+    val signedInUser = com.cse3310.projecthealthmonitoringsystem.monitoring.CurrentUser.userId
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(appointmentRequest, signedInUser) {
+        appointmentRequest?.let { request ->
+            if (request.owner == signedInUser) {
+                navController.navigate("appointment/${request.id}") { launchSingleTop = true }
+                com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentNavigation.consumed(request)
+                (context as? android.app.Activity)?.intent?.apply {
+                    removeExtra(com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentReminders.ID)
+                    removeExtra(com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentReminders.OWNER)
+                }
+            } else android.widget.Toast.makeText(context, "Sign in to the account for this appointment.", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
 
     val destinations = listOf(
         TopLevelDestination("Home", AppRoutes.HOME, PhmsIcons.Home),

@@ -6,6 +6,8 @@ import com.cse3310.projecthealthmonitoringsystem.data.entity.Alert
 import com.cse3310.projecthealthmonitoringsystem.data.entity.AlertType
 import com.cse3310.projecthealthmonitoringsystem.data.entity.DoseStatus
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.onStart
+import com.cse3310.projecthealthmonitoringsystem.validation.VitalAssessment
 
 /**
  * Monitoring System (Diyanshu): the missed-dose rule and alert records.
@@ -38,7 +40,7 @@ class MonitoringRepository(
         val existing = medicationRepository.getDoseAt(userId, medicationId, scheduledAt)
         if (existing?.status == DoseStatus.TAKEN)
             return@run IntakeConfirmation(IntakeOutcome.ALREADY_TAKEN, existing.doseId, existing.recordedAt)
-        if (existing?.status == DoseStatus.MISSED)
+        if (existing?.status == DoseStatus.MISSED || existing?.status == DoseStatus.SKIPPED)
             return@run IntakeConfirmation(IntakeOutcome.MISSED, existing.doseId, existing.recordedAt)
         val confirmedAt = clock()
         if (confirmedAt < scheduledAt) return@run IntakeConfirmation(IntakeOutcome.TOO_EARLY)
@@ -62,6 +64,15 @@ class MonitoringRepository(
                 else if (final?.status == DoseStatus.MISSED) IntakeOutcome.MISSED else IntakeOutcome.UNAVAILABLE,
                 doseId, final?.recordedAt)
         }
+    }
+
+    /** User-managed outcome/correction; any resolved missed alert remains in history. */
+    suspend fun recordIntake(userId: String, medicationId: Long, scheduledAt: Long, status: DoseStatus,
+        actualTakenAt: Long?, reason: String, expectedRevision: Long): Long = tx.run {
+        val id = medicationRepository.recordIntake(userId, medicationId, scheduledAt, status, actualTakenAt, reason, expectedRevision)
+        if (status == DoseStatus.TAKEN || status == DoseStatus.SKIPPED)
+            alertDao.resolveRecordedDose(userId, id, clock())
+        id
     }
 
     /**
@@ -132,21 +143,67 @@ class MonitoringRepository(
         })
     }
 
-    /** ABNORMAL_VITAL alert, raised by VitalsRepository when a reading is outside the normal range. */
-    suspend fun raiseAbnormalVitalAlert(userId: String, vitalId: Long, message: String): Long =
-        alertDao.insertAlert(
+    /** Source-linked and idempotent, including concurrent retries inside the Room transaction. */
+    suspend fun raiseAbnormalVitalAlert(userId: String, vitalId: Long): Long = tx.run {
+        val source = requireNotNull(alertDao.vitalAlertSource(userId, vitalId)) { "Reading is unavailable." }
+        require(source.isAbnormal) { "This reading does not need an alert." }
+        val existing = alertDao.alertForVital(userId, vitalId)
+        val message = source.messageFromReading()
+        if (existing != null) {
+            if (existing.message != message) alertDao.correctVitalAlert(userId, existing.alertId, message, false, clock())
+            existing.alertId
+        } else alertDao.insertAlert(
             Alert(userId = userId, type = AlertType.ABNORMAL_VITAL, message = message, vitalId = vitalId, createdAt = clock())
         )
+    }
+
+    /**
+     * Repairs only source-linked, generated alert text. Never guesses an entered value, changes a
+     * measurement or reinterprets historical ranges. A corrected normal reading resolves its stale
+     * alert in history; legitimate abnormal records, alert IDs and communication logs are retained.
+     */
+    suspend fun repairVitalAlerts(userId: String): Int = tx.run {
+        var corrected = 0
+        for (source in alertDao.vitalAlertSources(userId)) {
+            if (!source.message.startsWith("Abnormal ") && !source.message.startsWith("Corrected reading · ")) continue
+            val expected = source.messageFromReading()
+            if (source.message != expected)
+                corrected += alertDao.correctVitalAlert(userId, source.alertId, expected, !source.isAbnormal, clock())
+        }
+        corrected
+    }
+
+    private fun com.cse3310.projecthealthmonitoringsystem.data.dao.VitalAlertSource.messageFromReading() =
+        VitalAssessment.alertMessage(typeName, unit, value, secondaryValue, recordedAt, note, isAbnormal)
 
     /** View Details */
-    suspend fun getAlert(userId: String, alertId: Long): Alert? = alertDao.getAlert(userId, alertId)
+    suspend fun getAlert(userId: String, alertId: Long): Alert? {
+        repairVitalAlerts(userId)
+        return alertDao.getAlert(userId, alertId)
+    }
+
+    private fun dayStart(at: Long): Long = java.util.Calendar.getInstance().apply {
+        timeInMillis = at
+        set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    /** Read-only sharing view: original active/history lists and acknowledgment rules are unchanged. */
+    fun observeShareableAlerts(userId: String, now: Long = clock(), createdAfter: Long = 0): Flow<List<Alert>> =
+        alertDao.observeShareableAlerts(userId, now, dayStart(now), createdAfter).onStart { repairVitalAlerts(userId) }
+
+    /** Rechecks ownership, resolution and supersession immediately before preparing a message. */
+    suspend fun getShareableAlert(userId: String, alertId: Long, now: Long = clock(), createdAfter: Long = 0): Alert? {
+        repairVitalAlerts(userId)
+        return alertDao.getShareableAlert(userId, alertId, now, dayStart(now), createdAfter)
+    }
 
     /** Acknowledge. Returns false if already acknowledged or not this user's. */
     suspend fun acknowledgeAlert(userId: String, alertId: Long): Boolean = alertDao.acknowledge(userId, alertId, clock()) > 0
 
-    fun observeAlerts(userId: String): Flow<List<Alert>> = alertDao.observeAlerts(userId)
+    fun observeAlerts(userId: String): Flow<List<Alert>> = alertDao.observeAlerts(userId).onStart { repairVitalAlerts(userId) }
 
-    fun observeUnacknowledgedAlerts(userId: String): Flow<List<Alert>> = alertDao.observeUnacknowledged(userId)
+    fun observeUnacknowledgedAlerts(userId: String): Flow<List<Alert>> = alertDao.observeUnacknowledged(userId).onStart { repairVitalAlerts(userId) }
 
     suspend fun deleteAlert(userId: String, alertId: Long): Boolean = alertDao.deleteAlert(userId, alertId) > 0
 }

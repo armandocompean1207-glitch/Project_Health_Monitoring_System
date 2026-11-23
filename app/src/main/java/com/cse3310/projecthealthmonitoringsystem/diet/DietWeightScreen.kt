@@ -32,7 +32,7 @@ import java.util.*
 import com.cse3310.projecthealthmonitoringsystem.settings.*
 import com.cse3310.projecthealthmonitoringsystem.validation.HealthValidation
 
-private fun dateText(time: Long) = SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.US).format(Date(time))
+private fun dateText(time: Long) = SimpleDateFormat("MM/dd/yyyy · h:mm a", Locale.US).format(Date(time))
 private fun number(value: Double) = String.format(Locale.US, "%.1f", value)
 
 /** Uses the same active-user identity and repository boundary as the other integrated screens. */
@@ -57,6 +57,10 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val pageScroll = rememberScrollState()
+    val inlineOpen = editor in listOf("goal", "meal", "weight")
+    val dismissInline = rememberGuardedDismiss(inlineOpen, busy) { editor = null }
+    LaunchedEffect(editor) { if (inlineOpen) pageScroll.animateScrollTo(0) }
 
     fun perform(action: suspend () -> Unit) {
         if (busy) return
@@ -76,23 +80,51 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
         }
     }
 
-    PhmsPage {
-        PhmsScreenHeader("Diet and Weight", "Small entries. A clearer picture over time.", PhmsIcons.Diet, onBack)
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = androidx.compose.ui.graphics.Color(0xFF111827),
+        onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF111827), onBackground = androidx.compose.ui.graphics.Color(0xFF111827))) {
+    PhmsPage(scrollState = pageScroll) {
+        PhmsScreenHeader("Diet and Weight", "Track your meals and weight in one place.", PhmsIcons.Diet, if (inlineOpen) dismissInline else onBack)
         TabRow(selectedTabIndex = tab) {
             listOf("Diet", "Weight").forEachIndexed { index, label ->
-                Tab(selected = tab == index, onClick = { tab = index }, text = { Text(label) },
+                Tab(selected = tab == index, enabled = !busy, onClick = { tab = index }, text = { Text(label) },
                     selectedContentColor = MaterialTheme.colorScheme.onSurface, unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     icon = { Icon(if (index == 0) PhmsIcons.Diet else PhmsIcons.Weight, null) })
             }
         }
         message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+        key(editor, mealToEdit?.dietEntryId) {
+    if (editor == "goal") {
+        NumericInlineForm("Daily calorie goal", "Calories (kcal)", busy, initialText = goal.takeIf { it > 0 }?.toString().orEmpty(), onDismiss = { editor = null }) { value, _, _ ->
+            if (value > 0 && value <= Int.MAX_VALUE) {
+                goal = value.toInt()
+                preferences.edit().putInt("calories_$userId", goal).apply()
+                editor = null
+            }
+        }
+    }
+    if (editor == "weight") {
+        NumericInlineForm("Record weight", "Weight", busy, weight = true, onDismiss = { editor = null }) { value, unit, recordedAt ->
+            perform { repository.addWeight(userId, Weight(userId = userId, value = value, unit = unit, recordedAt = recordedAt)) }
+        }
+    }
+    if (editor == "meal") {
+        MealInlineForm(mealToEdit, day, busy, onDismiss = { editor = null }) { type, notes, name, kcal, at ->
+            perform {
+                val old = mealToEdit
+                if (old == null) {
+                    repository.addDietEntry(userId, DietEntry(userId = userId, mealType = type, eatenAt = at, notes = notes),
+                        listOf(Food(userId = userId, dietEntryId = 0, name = name, calories = kcal)))
+                } else {
+                    check(repository.editDietEntry(userId, old.copy(mealType = type, notes = notes, eatenAt = at))) { "Meal could not be updated." }
+                }
+                day = at
+            }
+        }
+    }
+
+        }
         if (tab == 0) {
-            TextButton(onClick = {
-                val calendar = Calendar.getInstance().apply { timeInMillis = day }
-                DatePickerDialog(context, { _, year, month, date ->
-                    day = Calendar.getInstance().apply { set(year, month, date) }.timeInMillis
-                }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
-            }) { Text(SimpleDateFormat("EEEE, MMM d", Locale.US).format(Date(day)) + " · Change day") }
+            PhmsDateInput(day, { it?.let { time -> day = time } }, "Change day", enabled = !busy)
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -109,10 +141,10 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
                     } else {
                         Text("Set your own daily goal to see progress.", style = MaterialTheme.typography.bodyMedium)
                     }
-                    TextButton(onClick = { editor = "goal" }) { Text(if (goal > 0) "Change calorie goal" else "Set calorie goal") }
+                    OutlinedButton(enabled = !busy, onClick = { editor = "goal" }, colors = ButtonDefaults.outlinedButtonColors(containerColor = androidx.compose.ui.graphics.Color.White, contentColor = androidx.compose.ui.graphics.Color(0xFF111827))) { Text(if (goal > 0) "Change calorie goal" else "Set calorie goal") }
                 }
             }
-            Button(onClick = { mealToEdit = null; editor = "meal" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("+ Add meal") }
+            if (editor != "meal") Button(onClick = { mealToEdit = null; editor = "meal" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("+ Add meal") }
             PhmsSectionHeader("Meal history", supportingText = "All your recorded meals, newest first.")
             if (meals.isEmpty()) {
                 PhmsEmptyStateCard("Start your food journal", "Add a meal and its foods to track your daily intake.",
@@ -147,17 +179,17 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         PhmsIconBadge(PhmsIcons.Weight)
                         Text("Latest weight", style = MaterialTheme.typography.titleMedium)
-                        Text("${number(DietRepository.convert(latest.value, latest.unit, displayUnit))} ${displayUnit.name.lowercase()}", style = MaterialTheme.typography.headlineMedium)
+                        Text("${number(DietRepository.convert(latest.value, latest.unit, displayUnit))} ${(if (displayUnit == WeightUnit.LB) "lbs" else "kg")}", style = MaterialTheme.typography.headlineMedium)
                         Text(dateText(latest.recordedAt), style = MaterialTheme.typography.bodyMedium)
                         weights.getOrNull(1)?.let { previous ->
                             val change = DietRepository.convert(latest.value, latest.unit, displayUnit) - DietRepository.convert(previous.value, previous.unit, displayUnit)
-                            Text("${if (change > 0) "+" else ""}${number(change)} ${displayUnit.name.lowercase()} since previous entry",
+                            Text(measurementComparison(change, 0.0, if (displayUnit == WeightUnit.LB) "lbs" else "kg").orEmpty(),
                                 style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
             }
-            Button(onClick = { editor = "weight" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("+ Add weight") }
+            if (editor != "weight") Button(onClick = { editor = "weight" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("+ Add weight") }
             if (weights.isEmpty()) {
                 PhmsEmptyStateCard("See your weight over time", "Record your first weight to start your personal history.",
                     PhmsIcons.Weight)
@@ -165,13 +197,14 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
                 val unit = displayUnit
                 VitalHistoryChart(weights.map {
                     VitalReadingItem("Weight", DietRepository.convert(it.value, it.unit, unit).toString(),
-                        unit.name.lowercase(), recordedAt = dateText(it.recordedAt), isAbnormal = false, timestamp = it.recordedAt)
-                }, VitalTypeOption(-1L, "Weight", unit.name.lowercase()))
-                PhmsSectionHeader("Weight log", supportingText = "Your recorded weights, in ${unit.name.lowercase()}.")
+                        (if (unit == WeightUnit.LB) "lbs" else "kg"), recordedAt = dateText(it.recordedAt), isAbnormal = false, timestamp = it.recordedAt,
+                        readingId = it.weightId, primaryNumeric = DietRepository.convert(it.value, it.unit, unit))
+                }, VitalTypeOption(-1L, "Weight", (if (unit == WeightUnit.LB) "lbs" else "kg")))
+                PhmsSectionHeader("Weight log", supportingText = "Your recorded weights, in ${(if (unit == WeightUnit.LB) "lbs" else "kg")}.")
                 weights.forEach { weight ->
                     OutlinedCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
-                            Text("${number(DietRepository.convert(weight.value, weight.unit, displayUnit))} ${displayUnit.name.lowercase()}", style = MaterialTheme.typography.titleMedium)
+                            Text("${number(DietRepository.convert(weight.value, weight.unit, displayUnit))} ${(if (displayUnit == WeightUnit.LB) "lbs" else "kg")}", style = MaterialTheme.typography.titleMedium)
                             Text(dateText(weight.recordedAt), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
@@ -180,33 +213,6 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
         }
     }
 
-    if (editor == "goal") {
-        NumericDialog("Daily calorie goal", "Calories (kcal)", busy, onDismiss = { editor = null }) { value, _ ->
-            if (value > 0 && value <= Int.MAX_VALUE) {
-                goal = value.toInt()
-                preferences.edit().putInt("calories_$userId", goal).apply()
-                editor = null
-            }
-        }
-    }
-    if (editor == "weight") {
-        NumericDialog("Record weight", "Weight", busy, weight = true, onDismiss = { editor = null }) { value, unit ->
-            perform { repository.addWeight(userId, Weight(userId = userId, value = value, unit = unit, recordedAt = System.currentTimeMillis())) }
-        }
-    }
-    if (editor == "meal") {
-        MealDialog(mealToEdit, busy, onDismiss = { editor = null }) { type, notes, name, kcal ->
-            perform {
-                val old = mealToEdit
-                if (old == null) {
-                    repository.addDietEntry(userId, DietEntry(userId = userId, mealType = type, eatenAt = day, notes = notes),
-                        listOf(Food(userId = userId, dietEntryId = 0, name = name, calories = kcal)))
-                } else {
-                    check(repository.editDietEntry(userId, old.copy(mealType = type, notes = notes))) { "Meal could not be updated." }
-                }
-            }
-        }
-    }
     if (editor == "food") {
         FoodDialog(foodToEdit, busy, onDismiss = { editor = null },
             onDelete = foodToEdit?.let { food -> { perform { check(repository.deleteFood(userId, food.foodId)) } } }) { name, kcal, protein, sugar ->
@@ -225,56 +231,89 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
             confirmButton = { TextButton(enabled = !busy, onClick = { perform { check(repository.deleteDietEntry(userId, entry.dietEntryId)) } }) { Text("Delete meal") } },
             dismissButton = { TextButton(enabled = !busy, onClick = { deleteMeal = null }) { Text("Cancel") } })
     }
+    }
 }
 
 @Composable
-private fun NumericDialog(title: String, label: String, busy: Boolean, weight: Boolean = false,
-    onDismiss: () -> Unit, onSave: (Double, WeightUnit) -> Unit) {
-    var text by rememberSaveable { mutableStateOf("") }
+private fun InlineFormCard(title: String, busy: Boolean, valid: Boolean, onCancel: () -> Unit, onSave: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit) {
+    OutlinedCard(Modifier.fillMaxWidth(), colors = CardDefaults.outlinedCardColors(containerColor = androidx.compose.ui.graphics.Color.White)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            content()
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(enabled = !busy && valid, onClick = onSave,
+                    colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFDF48),
+                        contentColor = androidx.compose.ui.graphics.Color(0xFF111827))) { Text(if (busy) "Saving…" else "Save") }
+                OutlinedButton(enabled = !busy, onClick = onCancel,
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = androidx.compose.ui.graphics.Color.White,
+                        contentColor = androidx.compose.ui.graphics.Color(0xFF111827))) { Text("Cancel") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NumericInlineForm(title: String, label: String, busy: Boolean, weight: Boolean = false,
+    initialText: String = "", onDismiss: () -> Unit, onSave: (Double, WeightUnit, Long) -> Unit) {
+    var text by rememberSaveable { mutableStateOf(initialText) }
     val prefs = rememberMeasurementPreferences()
     var unit by remember { mutableStateOf(prefs.weightUnit) }
+    var recordedAt by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
+    var dateValid by remember { mutableStateOf(true) }
     val value = text.toDoubleOrNull()
-    val dismiss = rememberGuardedDismiss(text.isNotBlank(), busy, onDismiss)
-    AlertDialog(onDismissRequest = dismiss, title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                NumberField(text, { text = it }, label)
-                if (weight) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    WeightUnit.entries.forEach { item ->
-                        FilterChip(selected = unit == item, onClick = { text.toDoubleOrNull()?.takeIf { it.isFinite() }?.let { text = String.format(Locale.US, "%.2f", DietRepository.convert(it, unit, item)) }; unit = item }, label = { Text(item.name.lowercase()) })
-                    }
+    val dismiss = rememberGuardedDismiss(text != initialText, busy, onDismiss)
+    androidx.activity.compose.BackHandler { dismiss() }
+    val valid = value != null && value.isFinite() && value > 0 && dateValid &&
+        (if (weight) HealthValidation.weightKg(DietRepository.convert(value, unit, WeightUnit.KG)) == null
+        else value % 1.0 == 0.0 && value <= 100000)
+    InlineFormCard(title, busy, valid, onDismiss, { onSave(value!!, unit, recordedAt) }) {
+        NumberField(text, { text = it }, label, enabled = !busy)
+        if (weight) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                WeightUnit.entries.forEach { item ->
+                    FilterChip(selected = unit == item, enabled = !busy, onClick = {
+                        text.toDoubleOrNull()?.takeIf { it.isFinite() }?.let {
+                            text = String.format(Locale.US, "%.2f", DietRepository.convert(it, unit, item))
+                        }; unit = item
+                    }, label = { Text(if (item == WeightUnit.LB) "lbs" else "kg") })
                 }
-                val validation = if (value == null) "Enter a number." else if (weight) HealthValidation.weightKg(DietRepository.convert(value, unit, WeightUnit.KG)) else HealthValidation.calories(value.toInt())
-                if (text.isNotBlank() && validation != null) Text(validation, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
-        }, confirmButton = { TextButton(enabled = !busy && value != null && value.isFinite() && value > 0 &&
-            (if (weight) HealthValidation.weightKg(DietRepository.convert(value, unit, WeightUnit.KG)) == null else value % 1.0 == 0.0 && value <= 100000), onClick = { onSave(value!!, unit) }) { Text(if (busy) "Saving…" else "Save") } },
-        dismissButton = { TextButton(enabled = !busy, onClick = dismiss) { Text("Cancel") } })
+            PhmsDateInput(recordedAt, { it?.let { time -> recordedAt = time } }, "Date recorded",
+                maxDate = System.currentTimeMillis(), enabled = !busy, onValidityChange = { dateValid = it })
+        }
+        val validation = if (value == null || !value.isFinite()) "Enter a valid number."
+            else if (weight) HealthValidation.weightKg(DietRepository.convert(value, unit, WeightUnit.KG))
+            else if (value % 1.0 != 0.0 || value > 100000 || value <= 0) "Enter a whole-number calorie goal from 1 to 100,000." else null
+        if (text.isNotBlank() && validation != null) Text(validation, color = MaterialTheme.colorScheme.error)
+    }
 }
 
 @Composable
-private fun MealDialog(entry: DietEntry?, busy: Boolean, onDismiss: () -> Unit,
-    onSave: (String, String, String, Int) -> Unit) {
+private fun MealInlineForm(entry: DietEntry?, day: Long, busy: Boolean, onDismiss: () -> Unit,
+    onSave: (String, String, String, Int, Long) -> Unit) {
     var type by rememberSaveable { mutableStateOf(entry?.mealType ?: "Breakfast") }
     var notes by rememberSaveable { mutableStateOf(entry?.notes ?: "") }
     var name by rememberSaveable { mutableStateOf("") }
     var calories by rememberSaveable { mutableStateOf("") }
+    var at by rememberSaveable { mutableLongStateOf(entry?.eatenAt ?: day) }
+    var dateValid by remember { mutableStateOf(true) }
     val dismiss = rememberGuardedDismiss(true, busy, onDismiss)
-    AlertDialog(onDismissRequest = dismiss, title = { Text(if (entry == null) "Add meal" else "Edit meal") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(type, { type = it }, label = { Text("Meal (breakfast, lunch, dinner…)") })
-                if (entry == null) {
-                    OutlinedTextField(name, { name = it }, label = { Text("Food name") })
-                    NumberField(calories, { calories = it }, "Calories (kcal)")
-                }
-                OutlinedTextField(notes, { notes = it }, label = { Text("Notes (optional)") })
-                if (entry != null) Text("Edit food names and nutrition from each food in the meal card.")
-            }
-        }, confirmButton = { TextButton(enabled = !busy && type.isNotBlank() &&
-            (entry != null || (name.isNotBlank() && calories.toIntOrNull()?.let { HealthValidation.calories(it) == null } == true)),
-            onClick = { onSave(type.trim(), notes.trim(), name.trim(), calories.toIntOrNull() ?: 0) }) { Text(if (busy) "Saving…" else "Save") } },
-        dismissButton = { TextButton(enabled = !busy, onClick = dismiss) { Text("Cancel") } })
+    androidx.activity.compose.BackHandler { dismiss() }
+    val valid = dateValid && type.isNotBlank() &&
+        (entry != null || (name.isNotBlank() && calories.toIntOrNull()?.let { HealthValidation.calories(it) == null } == true))
+    InlineFormCard(if (entry == null) "Add meal" else "Edit meal", busy, valid, onDismiss,
+        { onSave(type.trim(), notes.trim(), name.trim(), calories.toIntOrNull() ?: 0, at) }) {
+        OutlinedTextField(type, { type = it }, label = { Text("Meal (breakfast, lunch, dinner…)") }, enabled = !busy)
+        PhmsDateInput(at, { it?.let { time -> at = time } }, "Meal date", minDate = 1, maxDate = 4102444799999L,
+            enabled = !busy, onValidityChange = { dateValid = it })
+        if (entry == null) {
+            OutlinedTextField(name, { name = it }, label = { Text("Food name") }, enabled = !busy)
+            NumberField(calories, { calories = it }, "Calories (kcal)", enabled = !busy)
+        }
+        OutlinedTextField(notes, { notes = it }, label = { Text("Notes (optional)") }, enabled = !busy)
+        if (entry != null) Text("Edit foods from the meal card.")
+    }
 }
 
 @Composable
@@ -312,10 +351,10 @@ private fun FoodDialog(food: Food?, busy: Boolean, onDismiss: () -> Unit, onDele
 }
 
 @Composable
-private fun NumberField(value: String, onChange: (String) -> Unit, label: String) {
+private fun NumberField(value: String, onChange: (String) -> Unit, label: String, enabled: Boolean = true) {
     val parsed = value.toDoubleOrNull()
     val error = if (value.isBlank()) null else if (parsed == null || !parsed.isFinite() || parsed < 0) "Enter a finite, non-negative number." else null
-    OutlinedTextField(value, onChange, label = { Text(label) }, singleLine = true,
+    OutlinedTextField(value, onChange, label = { Text(label) }, singleLine = true, enabled = enabled,
         isError = error != null, supportingText = { error?.let { Text(it) } },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
 }

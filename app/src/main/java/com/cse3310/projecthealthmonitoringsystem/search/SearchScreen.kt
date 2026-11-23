@@ -74,7 +74,7 @@ private fun resultIcon(kind: String) = when (kind) {
     else -> PhmsIcons.Notes
 }
 private fun dateText(time: Long) =
-    SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.US).format(Date(time))
+    SimpleDateFormat("MM/dd/yyyy · h:mm a", Locale.US).format(Date(time))
 private fun summary(result: SearchResult): String {
     val text = result.subtitle.orEmpty()
     return if (result.kind == "NOTE") noteContent(text) else if (result.kind == "DOSE_LOG") {

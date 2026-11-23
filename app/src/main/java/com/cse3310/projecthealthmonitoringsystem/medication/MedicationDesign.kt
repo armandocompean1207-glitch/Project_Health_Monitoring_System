@@ -102,6 +102,7 @@ private fun DoseCompletionDetails(day: MedicationDayProgress, modifier: Modifier
         Text("${day.taken} ${if (day.taken == 1) "dose" else "doses"} taken", style = MaterialTheme.typography.titleMedium)
         Text(buildAnnotatedString {
             append("${day.remaining} remaining")
+            if (day.skipped > 0) append(" · ${day.skipped} skipped")
             if (day.missed > 0) withStyle(SpanStyle(color = MaterialTheme.colorScheme.error)) {
                 append(" · ${day.missed} missed")
             }

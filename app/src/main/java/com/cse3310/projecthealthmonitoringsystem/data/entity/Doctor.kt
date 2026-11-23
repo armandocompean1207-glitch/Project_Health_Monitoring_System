@@ -20,5 +20,7 @@ data class Doctor(
     val specialtyId: Long? = null,
     val phone: String = "",
     val email: String = "",
-    val address: String = ""
+    val address: String = "",
+    @androidx.room.ColumnInfo(defaultValue = "''") val providerType: String = "",
+    @androidx.room.ColumnInfo(defaultValue = "''") val clinicName: String = ""
 )
