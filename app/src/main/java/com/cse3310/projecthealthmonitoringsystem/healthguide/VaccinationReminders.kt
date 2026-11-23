@@ -17,6 +17,43 @@ import kotlinx.coroutines.flow.first
 /** Optional reminders for the user's entered next-dose date; never a computed vaccine schedule. */
 object VaccinationReminders {
     private const val CHANNEL = "phms_vaccinations"
+
+    private fun timePreferences(context: Context) =
+        context.getSharedPreferences("vaccination_reminder_times", Context.MODE_PRIVATE)
+    private fun timeKey(owner: String, id: Long) = "$owner:$id"
+
+    fun savedMinutes(context: Context, owner: String, id: Long): Int? =
+        timePreferences(context).getInt(timeKey(owner, id), -1).takeIf { it in 0..1439 }
+
+    fun reminderMinutes(context: Context, record: Vaccination): Int? =
+        savedMinutes(context, record.userId, record.vaccinationId)
+            ?: record.nextDoseDate?.let(VaccinationDates::reminderAt)?.let { at ->
+                java.util.Calendar.getInstance().apply { timeInMillis = at }.let {
+                    it.get(java.util.Calendar.HOUR_OF_DAY) * 60 + it.get(java.util.Calendar.MINUTE)
+                }
+            }
+
+    fun saveMinutes(context: Context, owner: String, id: Long, minutes: Int) {
+        require(minutes in 0..1439)
+        check(timePreferences(context).edit().putInt(timeKey(owner, id), minutes).commit()) {
+            "Couldn't save the reminder time. Please try again."
+        }
+    }
+
+    fun reminderAt(context: Context, record: Vaccination): Long? {
+        val date = record.nextDoseDate ?: return null
+        val custom = savedMinutes(context, record.userId, record.vaccinationId)
+            ?: return VaccinationDates.reminderAt(date) // Preserve existing reminders without a saved custom time.
+        return VaccinationDates.parse(date)?.let { day ->
+            java.util.Calendar.getInstance().apply {
+                timeInMillis = day
+                set(java.util.Calendar.HOUR_OF_DAY, custom / 60)
+                set(java.util.Calendar.MINUTE, custom % 60)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }.timeInMillis
+        }
+    }
     private fun pending(context: Context, owner: String, id: Long): PendingIntent =
         PendingIntent.getBroadcast(context, 0,
             Intent(context, VaccinationReminderReceiver::class.java)
@@ -30,7 +67,7 @@ object VaccinationReminders {
     fun schedule(context: Context, record: Vaccination, now: Long = System.currentTimeMillis()) {
         cancel(context, record.userId, record.vaccinationId)
         val date = record.nextDoseDate ?: return
-        val at = VaccinationDates.reminderAt(date) ?: return
+        val at = reminderAt(context, record) ?: return
         if (!record.reminderEnabled || record.reminderNotifiedFor == date || date < VaccinationDates.iso(now)) return
         AccountSession.whileActive(context, record.userId) {
             context.getSystemService(AlarmManager::class.java)?.setAndAllowWhileIdle(
@@ -72,7 +109,7 @@ class VaccinationReminderReceiver : BroadcastReceiver() {
                 val repo = context.phms().vaccinationRepository
                 val record = repo.get(owner, id) ?: return@launch
                 val date = record.nextDoseDate ?: return@launch
-                val at = VaccinationDates.reminderAt(date) ?: return@launch
+                val at = VaccinationReminders.reminderAt(context, record) ?: return@launch
                 if (!record.reminderEnabled || at > System.currentTimeMillis() ||
                     VaccinationDates.iso(System.currentTimeMillis()) != date ||
                     !AlertSender.canNotify(context) || !NotificationManagerCompat.from(context).areNotificationsEnabled()) return@launch

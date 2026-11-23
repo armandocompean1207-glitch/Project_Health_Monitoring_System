@@ -14,9 +14,9 @@ fun SettingsScreen(onBack: () -> Unit) {
     val id = CurrentUser.userId
     val prefs = rememberMeasurementPreferences()
     MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
-        onSurface = androidx.compose.ui.graphics.Color.Black,
-        onSurfaceVariant = androidx.compose.ui.graphics.Color.Black,
-        onBackground = androidx.compose.ui.graphics.Color.Black)) {
+        onSurface = androidx.compose.ui.graphics.Color(0xFF0F172A),
+        onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF0F172A),
+        onBackground = androidx.compose.ui.graphics.Color(0xFF0F172A))) {
     PhmsPage {
         PhmsScreenHeader("Settings", "Choose how your measurements appear.", PhmsIcons.DataMaintenance, onBack)
         Text("Measurements", style = MaterialTheme.typography.titleLarge)

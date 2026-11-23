@@ -48,8 +48,8 @@ fun HomeDashboardScreen(username: String, onUpdateProfileClick: () -> Unit, onMe
     onAlertDetails: (Long) -> Unit = { onAlertsClick() },
     onAcknowledgeAlert: (Long) -> Unit = {},
     onNotifyAlert: (Long) -> Unit = { onAlertsClick() }) {
-    val scheme = MaterialTheme.colorScheme.copy(primary = HomePalette.Yellow, onPrimary = HomePalette.Ink,
-        primaryContainer = HomePalette.Yellow, onPrimaryContainer = HomePalette.Ink,
+    val scheme = MaterialTheme.colorScheme.copy(primary = HomePalette.Yellow, onPrimary = HomePalette.White,
+        primaryContainer = HomePalette.Yellow, onPrimaryContainer = HomePalette.White,
         background = HomePalette.Background, onBackground = HomePalette.Ink,
         surface = HomePalette.White, onSurface = HomePalette.Ink, onSurfaceVariant = HomePalette.Ink)
     MaterialTheme(colorScheme = scheme) {
@@ -60,7 +60,12 @@ fun HomeDashboardScreen(username: String, onUpdateProfileClick: () -> Unit, onMe
                     .padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-                        HomeIcon(PhmsIcons.Vitals)
+                        Surface(color = HomePalette.Yellow, contentColor = HomePalette.White, shape = CircleShape, modifier = Modifier.size(48.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(androidx.compose.ui.res.painterResource(com.cse3310.projecthealthmonitoringsystem.R.drawable.ic_phms_brandshield),
+                                    null, Modifier.size(24.dp), tint = HomePalette.White)
+                            }
+                        }
                         Text("PHMS", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                             modifier = Modifier.padding(start = 12.dp).weight(1f))
                         IconButton(onClick = onAlertsClick) { Icon(PhmsIcons.Alerts, "Notifications", Modifier.size(24.dp)) }
@@ -89,7 +94,19 @@ fun HomeDashboardScreen(username: String, onUpdateProfileClick: () -> Unit, onMe
                                         else "No active alerts.",
                                         style = MaterialTheme.typography.bodyLarge)
                                 }
-                                HomeTextAction("View alerts", onAlertsClick)
+                                OutlinedButton(
+                                    onClick = onAlertsClick,
+                                    modifier = Modifier.widthIn(max = 144.dp).heightIn(min = 48.dp),
+                                    shape = CircleShape,
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = HomePalette.White,
+                                        contentColor = HomePalette.Ink),
+                                    border = BorderStroke(1.dp, HomePalette.Border),
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                                ) {
+                                    Text("View alerts", maxLines = 2,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                }
                             }
                             summary.alert?.let { alert ->
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -151,7 +168,7 @@ fun HomeDashboardScreen(username: String, onUpdateProfileClick: () -> Unit, onMe
                         readings.chunked(if (twoColumns) 2 else 1).forEach { row ->
                             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 row.forEach { (title, reading, icon) ->
-                                    HomeVitalCard(title, reading, icon, onVitalsClick, Modifier.weight(1f).fillMaxHeight())
+                                    HomeVitalCard(title, reading, icon, onVitalsClick, Modifier.weight(1f).fillMaxHeight(), onAlert = onAlertsClick)
                                 }
                             }
                         }

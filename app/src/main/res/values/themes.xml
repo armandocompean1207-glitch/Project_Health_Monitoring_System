@@ -3,7 +3,7 @@
 
     <style name="Theme.ProjectHealthMonitoringSystem" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@drawable/splash_screen_background</item>
-        <item name="android:colorAccent">#FEDF48</item>
+        <item name="android:colorAccent">#065F46</item>
         <item name="android:textColorPrimary">#0F172A</item>
         <item name="android:textColorPrimaryInverse">#0F172A</item>
     </style>

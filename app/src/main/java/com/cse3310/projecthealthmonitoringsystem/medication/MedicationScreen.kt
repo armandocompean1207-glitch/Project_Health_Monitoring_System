@@ -231,8 +231,8 @@ private fun MedicationContent() {
                 com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsIcons.Medication,
                 if (showForm) dismissForm else null)
             else MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
-                primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFDF48),
-                onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF111827))) {
+                primaryContainer = androidx.compose.ui.graphics.Color(0xFF065F46),
+                onPrimaryContainer = androidx.compose.ui.graphics.Color.White)) {
                 com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsScreenHeader(
                     "Medication", "Your medicines and daily schedule.",
                     com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsIcons.Medication)
@@ -243,7 +243,11 @@ private fun MedicationContent() {
             item { Button(onClick = { openForm(null) }) { Text("Add medication") } }
         } else {
             item {
-                Card(Modifier.fillMaxWidth()) {
+                if (addingPharmacy) com.cse3310.projecthealthmonitoringsystem.maintenance.PharmacyEditor(
+                    com.cse3310.projecthealthmonitoringsystem.data.entity.Pharmacy(userId = userId, name = ""),
+                    onDismiss = { addingPharmacy = false },
+                    onSaved = { pharmacyId = it; pharmacyTouched = true; addingPharmacy = false })
+                else Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(name, { name = it }, label = { Text("Name") }, enabled = !saving && !checking,
                             isError = formError != null && HealthValidation.name(name) != null,
@@ -361,10 +365,7 @@ private fun MedicationContent() {
         )
     }
 
-    if (addingPharmacy) com.cse3310.projecthealthmonitoringsystem.maintenance.PharmacyEditor(
-        com.cse3310.projecthealthmonitoringsystem.data.entity.Pharmacy(userId = userId, name = ""),
-        onDismiss = { addingPharmacy = false },
-        onSaved = { pharmacyId = it; pharmacyTouched = true; addingPharmacy = false })
+
     if (addingProvider) com.cse3310.projecthealthmonitoringsystem.maintenance.ProviderEditor(
         com.cse3310.projecthealthmonitoringsystem.data.entity.Doctor(userId = userId, name = ""),
         onDismiss = { addingProvider = false },

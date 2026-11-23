@@ -86,10 +86,10 @@ fun AlertActions(onDetails: (() -> Unit)?, onAcknowledge: (() -> Unit)?, onNotif
     val scale = androidx.compose.ui.platform.LocalDensity.current.fontScale
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         val colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = androidx.compose.ui.graphics.Color(0xFFFFDF48),
-            contentColor = androidx.compose.ui.graphics.Color(0xFF111827),
-            disabledContainerColor = androidx.compose.ui.graphics.Color(0xFFFFDF48))
-        val border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFFFDF48))
+            containerColor = androidx.compose.ui.graphics.Color(0xFF065F46),
+            contentColor = androidx.compose.ui.graphics.Color.White,
+            disabledContainerColor = androidx.compose.ui.graphics.Color(0xFF065F46))
+        val border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFF065F46))
         if (onDetails != null) androidx.compose.material3.OutlinedButton(onClick = onDetails,
             colors = colors, border = border, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             modifier = Modifier.widthIn(min = 65.dp * scale).weight(1f).heightIn(min = 48.dp)) { Text("View", maxLines = 1, softWrap = false) }
@@ -126,7 +126,7 @@ fun AlertSummary(content: PresentedAlert, onDetails: () -> Unit,
     OutlinedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AlertHeading(content.title)
-            Text(content.guidance, style = MaterialTheme.typography.bodyLarge)
+            Text(content.guidance, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
             content.recorded?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
             AlertActions(onDetails, onAcknowledge, onNotify)
         }

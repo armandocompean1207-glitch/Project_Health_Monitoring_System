@@ -87,10 +87,10 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, o
 
 
     MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
-        onSurface = androidx.compose.ui.graphics.Color(0xFF111827),
-        onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF111827),
-        primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFDF48),
-        onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF111827))) {
+        onSurface = androidx.compose.ui.graphics.Color(0xFF0F172A),
+        onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF0F172A),
+        primaryContainer = androidx.compose.ui.graphics.Color(0xFF065F46),
+        onPrimaryContainer = androidx.compose.ui.graphics.Color.White)) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -110,7 +110,7 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, o
         if (visible.isEmpty()) item {
             PhmsEmptyStateCard(if (historyTab) "No acknowledged alerts" else "No active alerts",
                 if (historyTab) "Acknowledged alerts stay here for reference." else "New alerts from recorded doses and readings appear here.",
-                PhmsIcons.Alerts, actionLabel = "Manage trusted contacts", onAction = onOpenCommunication)
+                PhmsIcons.Alerts, actionLabel = "Manage trusted contacts", onAction = onOpenCommunication, outlinedAction = true)
         }
         items(visible, key = { it.alertId }) { alert ->
             val content = presentAlert(alert, readingsById[alert.vitalId], preferences)
@@ -197,7 +197,7 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, o
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     content.recorded?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                    Text(content.guidance)
+                    Text(content.guidance, color = MaterialTheme.colorScheme.error)
                     TextButton(onClick = { viewing = null; notifyPerson(alert.alertId) }) { Text("Notify designated person") }
                     if (viewingLog.isEmpty()) {
                         Text("No contact attempts are logged for this alert.", style = MaterialTheme.typography.bodySmall)

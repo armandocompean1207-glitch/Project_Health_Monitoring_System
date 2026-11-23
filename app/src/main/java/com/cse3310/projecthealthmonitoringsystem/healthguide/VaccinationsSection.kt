@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 @Composable
-internal fun VaccinationsSection() {
+internal fun VaccinationsSection(onBack: (() -> Unit)? = null) {
     val context = LocalContext.current
     val repo = context.phms().vaccinationRepository
     val owner = CurrentUser.userId
@@ -38,14 +38,35 @@ internal fun VaccinationsSection() {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
-    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color(0xFFFFDF48),
-        onPrimary = Color(0xFF111827), primaryContainer = Color(0xFFFFDF48), onPrimaryContainer = Color(0xFF111827))) {
-        PhmsSectionHeader("Vaccinations")
-        Button(onClick = { editing = null; error = null; formOpen = true }) {
-            Text("+ Add vaccination")
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color(0xFF065F46),
+        onPrimary = Color.White, primaryContainer = Color(0xFF065F46), onPrimaryContainer = Color.White)) {
+        if (onBack != null) PhmsScreenHeader("Vaccinations", icon = Icons.Outlined.Vaccines,
+            onBack = { if (!formOpen) onBack() }) else PhmsSectionHeader("Vaccinations")
+        if (!formOpen) Button(onClick = { editing = null; error = null; formOpen = true }) {
+            Text("Add Vaccination")
+        }
+        if (formOpen) key(editing?.vaccinationId) {
+            VaccinationEditor(editing, owner, busy, error, onDismiss = { formOpen = false }, onSave = { value ->
+                if (!busy) {
+                    busy = true; error = null
+                    scope.launch {
+                        try {
+                            val id = repo.save(owner, value)
+                            val saved = checkNotNull(repo.get(owner, id))
+
+                            // The record remains saved even if Android cannot schedule its optional reminder.
+                            val scheduled = runCatching { VaccinationReminders.schedule(context, saved) }.isSuccess
+                            formOpen = false
+                            snackbar.showSnackbar(if (scheduled) "Vaccination saved." else "Vaccination saved. Check reminder settings.")
+                        } catch (cancelled: CancellationException) { throw cancelled
+                        } catch (failure: Exception) { error = failure.message ?: "Couldn't save this vaccination."
+                        } finally { busy = false }
+                    }
+                }
+            })
         }
         error?.takeIf { !formOpen }?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        if (records.isEmpty()) Text("Keep a record of vaccinations you've received. Add only dates and next doses provided by your care team.")
+        if (records.isEmpty()) Text("Keep a record of vaccinations you've received. Add only dates and next doses provided by your provider.")
         records.forEach { record ->
             var expanded by remember(record.vaccinationId) { mutableStateOf(false) }
             OutlinedCard(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth(),
@@ -66,7 +87,9 @@ internal fun VaccinationsSection() {
                         if (record.providerOrPharmacy.isNotBlank()) Text(record.providerOrPharmacy)
                         if (record.location.isNotBlank()) Text(record.location)
                         if (record.notes.isNotBlank()) Text(record.notes)
-                        if (record.reminderEnabled) Text("Reminder requested for your saved next dose date, around 9:00 AM.")
+                        if (record.reminderEnabled) VaccinationReminders.reminderMinutes(context, record)?.let { minutes ->
+                            Text("Reminder: ${com.cse3310.projecthealthmonitoringsystem.monitoring.DoseTimes.displayClock(minutes)} on your next dose date.")
+                        }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             PhmsTextButton(enabled = !busy, onClick = { editing = record; error = null; formOpen = true }) { Text("Edit") }
                             PhmsTextButton(enabled = !busy, onClick = { removing = record }) { Text("Delete") }
@@ -76,25 +99,7 @@ internal fun VaccinationsSection() {
             }
         }
         SnackbarHost(snackbar)
-        if (formOpen) key(editing?.vaccinationId) {
-            VaccinationEditor(editing, owner, busy, error, onDismiss = { formOpen = false }, onSave = { value ->
-                if (!busy) {
-                    busy = true; error = null
-                    scope.launch {
-                        try {
-                            val id = repo.save(owner, value)
-                            val saved = checkNotNull(repo.get(owner, id))
-                            // The record remains saved even if Android cannot schedule its optional reminder.
-                            val scheduled = runCatching { VaccinationReminders.schedule(context, saved) }.isSuccess
-                            formOpen = false
-                            snackbar.showSnackbar(if (scheduled) "Vaccination saved." else "Vaccination saved. Check reminder settings.")
-                        } catch (cancelled: CancellationException) { throw cancelled
-                        } catch (failure: Exception) { error = failure.message ?: "Couldn't save this vaccination."
-                        } finally { busy = false }
-                    }
-                }
-            })
-        }
+
         removing?.let { record ->
             AlertDialog(onDismissRequest = { if (!busy) removing = null }, title = { Text("Delete vaccination?") },
                 text = { Text("Remove ${record.name} and its reminder? This cannot be undone.") },
@@ -119,7 +124,6 @@ internal fun VaccinationsSection() {
 @Composable
 private fun VaccinationEditor(original: Vaccination?, owner: String, busy: Boolean, saveError: String?,
     onDismiss: () -> Unit, onSave: (Vaccination) -> Unit) {
-    val context = LocalContext.current
     var name by remember { mutableStateOf(original?.name.orEmpty()) }
     var received by remember { mutableStateOf(original?.receivedDate ?: VaccinationDates.iso(System.currentTimeMillis())) }
     var dose by remember { mutableStateOf(original?.doseNumber?.toString().orEmpty()) }
@@ -128,19 +132,23 @@ private fun VaccinationEditor(original: Vaccination?, owner: String, busy: Boole
     var next by remember { mutableStateOf(original?.nextDoseDate) }
     var notes by remember { mutableStateOf(original?.notes.orEmpty()) }
     var remind by remember { mutableStateOf(original?.reminderEnabled ?: false) }
+    var choosingReminderDate by remember { mutableStateOf(false) }
     var attempted by remember { mutableStateOf(false) }
     var receivedValid by remember { mutableStateOf(true) }
     var nextValid by remember { mutableStateOf(true) }
     val value = Vaccination(original?.vaccinationId ?: 0, owner, name, received, dose.toIntOrNull(),
         provider, location, next, notes, remind, original?.reminderNotifiedFor)
-    val issue = if (!receivedValid || !nextValid) "Enter valid dates as MM/DD/YYYY." else if (dose.isNotBlank() && dose.toIntOrNull() == null) "Enter a positive whole dose number."
+    val issue = if (remind && next == null) "Choose a next scheduled dose date."
+        else if (!receivedValid || !nextValid) "Enter valid dates as MM/DD/YYYY." else if (dose.isNotBlank() && dose.toIntOrNull() == null) "Enter a positive whole dose number."
         else VaccinationDates.issue(value, System.currentTimeMillis(), original)
     val dirty = value != (original ?: Vaccination(userId = owner, name = "", receivedDate = VaccinationDates.iso(System.currentTimeMillis())))
     val dismiss = rememberGuardedDismiss(dirty, busy, onDismiss)
-    AlertDialog(onDismissRequest = dismiss, title = { Text(if (original == null) "Add vaccination" else "Edit vaccination") },
-        containerColor = Color.White,
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()).imePadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    androidx.activity.compose.BackHandler { dismiss() }
+    PhmsCard(Modifier.fillMaxWidth().imePadding(),
+        colors = CardDefaults.outlinedCardColors(containerColor = Color.White)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PhmsScreenHeader(if (original == null) "Add Vaccination" else "Edit vaccination",
+                icon = Icons.Outlined.Vaccines, onBack = dismiss)
                 PhmsTextField(name, { name = it }, label = { Text("Vaccine name") }, enabled = !busy,
                     isError = attempted && name.isBlank(), modifier = Modifier.fillMaxWidth())
                 PhmsDateInput(VaccinationDates.parse(received), { it?.let { time -> received = VaccinationDates.iso(time) } },
@@ -155,14 +163,32 @@ private fun VaccinationEditor(original: Vaccination?, owner: String, busy: Boole
                 if (next != null) PhmsTextButton(onClick = { next = null; remind = false }, enabled = !busy) { Text("Remove next dose date") }
                 PhmsTextField(notes, { notes = it }, label = { Text("Notes (optional)") }, enabled = !busy)
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    Checkbox(checked = remind, enabled = !busy && next != null, onCheckedChange = { remind = it })
-                    Text("Remind me on the next dose date, around 9:00 AM.", Modifier.weight(1f))
+                    Checkbox(checked = remind, enabled = !busy, onCheckedChange = { checked ->
+                        if (checked && next == null) choosingReminderDate = true else remind = checked
+                    })
+                    Text("Remind me on the next dose date.", Modifier.weight(1f))
                 }
+
                 if (remind) Text("Notifications must be enabled in Settings. Android may delay reminders.", style = MaterialTheme.typography.bodySmall)
                 if (attempted && issue != null) Text(issue, color = MaterialTheme.colorScheme.error)
                 saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(enabled = !busy, onClick = { attempted = true; if (issue == null) onSave(value) }) {
+                    Text(if (busy) "Saving…" else "Save vaccination")
+                }
+                PhmsOutlinedButton(enabled = !busy, onClick = dismiss) { Text("Cancel") }
             }
-        },
-        confirmButton = { Button(enabled = !busy, onClick = { attempted = true; if (issue == null) onSave(value) }) { Text(if (busy) "Saving…" else "Save vaccination") } },
-        dismissButton = { PhmsTextButton(enabled = !busy, onClick = dismiss) { Text("Cancel") } })
+        }
+    }
+    if (choosingReminderDate) PhmsCalendarPicker(
+        initial = next?.let(VaccinationDates::parse) ?: System.currentTimeMillis(),
+        minDate = VaccinationDates.parse(received), maxDate = null,
+        onDismiss = { choosingReminderDate = false },
+        onConfirm = { date ->
+            next = VaccinationDates.iso(date)
+            nextValid = true
+            remind = true
+            choosingReminderDate = false
+        })
+
 }

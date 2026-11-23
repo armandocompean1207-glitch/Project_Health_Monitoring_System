@@ -16,6 +16,10 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Vaccines
+import com.cse3310.projecthealthmonitoringsystem.data.entity.Vaccination
+import com.cse3310.projecthealthmonitoringsystem.data.repository.VaccinationDates
+import com.cse3310.projecthealthmonitoringsystem.healthguide.VaccinationsSection
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -60,6 +64,7 @@ private fun resultLabel(kind: String) = when (kind) {
     "DOCTOR" -> "Doctor"
     "DOCTOR_VISIT" -> "Appointment"
     "CHECKUP" -> "Annual checkup"
+    "VACCINATION" -> "Vaccination"
     "VITAL_SIGN" -> "Vital reading"
     "DIET_ENTRY" -> "Meal"
     "WEIGHT" -> "Weight"
@@ -69,6 +74,7 @@ private fun resultIcon(kind: String) = when (kind) {
     "MEDICATION", "DOSE_LOG" -> PhmsIcons.Medication
     "DOCTOR", "DOCTOR_VISIT", "CHECKUP" -> PhmsIcons.Appointments
     "VITAL_SIGN" -> PhmsIcons.Vitals
+    "VACCINATION" -> Icons.Outlined.Vaccines
     "DIET_ENTRY" -> PhmsIcons.Diet
     "WEIGHT" -> PhmsIcons.Weight
     else -> PhmsIcons.Notes
@@ -83,6 +89,14 @@ private fun summary(result: SearchResult): String {
     } else text
 }
 
+private fun vaccinationResult(record: Vaccination) = SearchResult(
+    "VACCINATION", record.vaccinationId, record.name,
+    listOfNotNull("Received ${VaccinationDates.label(record.receivedDate)}",
+        record.doseNumber?.let { "Dose $it" }, record.providerOrPharmacy.takeIf { it.isNotBlank() },
+        record.location.takeIf { it.isNotBlank() }, record.nextDoseDate?.let { "Next dose: ${VaccinationDates.label(it)}" },
+        record.notes.takeIf { it.isNotBlank() }).joinToString(" · "),
+    VaccinationDates.parse(record.receivedDate))
+
 /** Search and record previews reuse the existing account-filtered repository queries. */
 @Composable
 fun SearchScreen(onBack: () -> Unit, onOpenModule: (String) -> Unit = {}) {
@@ -90,6 +104,9 @@ fun SearchScreen(onBack: () -> Unit, onOpenModule: (String) -> Unit = {}) {
     val app = context.phms()
     val userId = CurrentUser.userId
     if (userId.isBlank()) return
+    var vaccinationsOpen by rememberSaveable(userId) { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = vaccinationsOpen) { vaccinationsOpen = false }
+    val vaccinations by remember(userId) { app.vaccinationRepository.observe(userId) }.collectAsState(emptyList())
     val history = remember(userId) { SearchHistory(context, userId) }
     var recent by remember(userId) { mutableStateOf(history.recent()) }
     var keyword by rememberSaveable(userId) { mutableStateOf("") }
@@ -112,7 +129,7 @@ fun SearchScreen(onBack: () -> Unit, onOpenModule: (String) -> Unit = {}) {
     }
 
     // Cancellation prevents slower, older searches from replacing newer filters or keywords.
-    LaunchedEffect(userId, keyword, categoryName, range, requested, shortcut) {
+    LaunchedEffect(userId, keyword, categoryName, range, requested, shortcut, vaccinations) {
         if (requested == 0 && shortcut == null) return@LaunchedEffect
         results = null
         error = null
@@ -134,13 +151,20 @@ fun SearchScreen(onBack: () -> Unit, onOpenModule: (String) -> Unit = {}) {
                 "Annual checkup" -> listOfNotNull(app.searchRepository.nextAnnualCheckup(userId)?.let {
                     SearchResult("CHECKUP", 0, "Next annual checkup", "Your profile's annual checkup date", it)
                 })
-                else -> (category?.let { listOf(it) } ?: SearchCategory.values().toList())
-                    .flatMap { app.searchRepository.search(userId, it, keyword, from, if (from != null) now else null) }
-                    .sortedByDescending { it.timestamp }
+                else -> ((category?.let { listOf(it) } ?: SearchCategory.values().toList())
+                    .flatMap { app.searchRepository.search(userId, it, keyword, from, if (from != null) now else null) } +
+                    if (category == null) vaccinations.filter { it.name.contains(keyword.trim(), ignoreCase = true) }
+                        .map(::vaccinationResult).filter { from == null || it.timestamp?.let { time -> time in from..now } == true }
+                    else emptyList()).sortedByDescending { it.timestamp }
             }
         } catch (e: CancellationException) { throw e
         } catch (_: Exception) { error = "Couldn't load your records. Please try again."
         } finally { loading = false }
+    }
+
+    if (vaccinationsOpen) {
+        PhmsPage { VaccinationsSection(onBack = { vaccinationsOpen = false }) }
+        return
     }
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -241,7 +265,8 @@ fun SearchScreen(onBack: () -> Unit, onOpenModule: (String) -> Unit = {}) {
         LaunchedEffect(userId, hit) {
             try {
                 // Re-read under the current account; removed or foreign records cannot be opened.
-                current = if (hit.kind == "CHECKUP") app.searchRepository.nextAnnualCheckup(userId)?.let {
+                current = if (hit.kind == "VACCINATION") app.vaccinationRepository.get(userId, hit.itemId)?.let(::vaccinationResult)
+                else if (hit.kind == "CHECKUP") app.searchRepository.nextAnnualCheckup(userId)?.let {
                     hit.copy(timestamp = it)
                 } else app.searchRepository.search(userId, resultCategory(hit.kind), "")
                     .firstOrNull { it.kind == hit.kind && it.itemId == hit.itemId }
@@ -267,7 +292,8 @@ fun SearchScreen(onBack: () -> Unit, onOpenModule: (String) -> Unit = {}) {
                 }
             },
             confirmButton = { if (ready && current != null) TextButton(onClick = {
-                selected = null; onOpenModule(hit.kind)
+                selected = null
+                if (hit.kind == "VACCINATION") vaccinationsOpen = true else onOpenModule(hit.kind)
             }) { Text("Open section") } },
             dismissButton = { TextButton(onClick = { selected = null }) { Text("Close") } })
     }

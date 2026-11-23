@@ -59,8 +59,8 @@ fun VitalSignsScreen(vitalTypes: List<VitalTypeOption>, readings: List<VitalRead
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(savedVersion) { if (savedVersion > 0) entering = false }
     LaunchedEffect(saveMessage) { saveMessage?.let { snackbar.showSnackbar(it); onMessageShown() } }
-    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color(0xFF111827),
-        onSurfaceVariant = Color(0xFF111827), onBackground = Color(0xFF111827))) {
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color(0xFF0F172A),
+        onSurfaceVariant = Color(0xFF0F172A), onBackground = Color(0xFF0F172A))) {
     Box(modifier.fillMaxSize()) {
         if (historyType != null) {
             VitalReadingHistory(historyType, readings.filter { it.typeName == historyType.name }) { historyId = null }
@@ -70,8 +70,8 @@ fun VitalSignsScreen(vitalTypes: List<VitalTypeOption>, readings: List<VitalRead
             VitalTrendDetail(trendType, readings.filter { it.typeName == trendType.name },
                 onBack = { trendId = null }, onAdd = { entering = true }, onSeeAll = { historyId = trendType.id })
         } else PhmsPage(Modifier.padding(bottom = 12.dp)) {
-            MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFDF48),
-                onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF111827))) {
+            MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primaryContainer = androidx.compose.ui.graphics.Color(0xFF065F46),
+                onPrimaryContainer = androidx.compose.ui.graphics.Color.White)) {
                 PhmsScreenHeader("Vital signs", "Your readings, over time.", PhmsIcons.Vitals)
             }
             PhmsOutlinedButton(onClick = { reporting = true }, modifier = Modifier.fillMaxWidth()) {
@@ -97,13 +97,14 @@ fun VitalSignsScreen(vitalTypes: List<VitalTypeOption>, readings: List<VitalRead
                             }
                         }
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primaryContainer = Color(0xFFFFDF48), onPrimaryContainer = Color.Black)) {
+                                        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primaryContainer = Color(0xFF065F46), onPrimaryContainer = Color.White)) {
                                             PhmsIconBadge(vitalIconFor(selected.name))
                                         }
                             Column(Modifier.weight(1f)) {
                                 Text("Latest ${selected.name.lowercase()}", style = MaterialTheme.typography.bodyMedium)
                                 Text(latest?.let { "${it.value}${it.secondValue?.let { v -> "/$v" } ?: ""} ${it.unit}" } ?: "No reading yet",
-                                    style = MaterialTheme.typography.headlineMedium)
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = if (latest?.isAbnormal == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                             }
                         }
                         latest?.let {
@@ -126,7 +127,8 @@ fun VitalSignsScreen(vitalTypes: List<VitalTypeOption>, readings: List<VitalRead
                 if (legacyExpanded) {
                     PhmsSectionHeader("Earlier measurements")
                     legacy.sortedByDescending { it.timestamp }.forEach {
-                        ListItem(headlineContent = { Text("${it.typeName}: ${it.value} ${it.unit}") },
+                        ListItem(headlineContent = { Text("${it.typeName}: ${it.value} ${it.unit}",
+                            color = if (it.isAbnormal) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface) },
                             supportingContent = { Text(it.recordedAt) })
                     }
                 }
@@ -158,7 +160,7 @@ private fun HealthTrends(types: List<VitalTypeOption>, readings: List<VitalReadi
                     colors = CardDefaults.outlinedCardColors(containerColor = Color.White)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
-                            primaryContainer = Color(0xFFFFDF48), onPrimaryContainer = Color.Black)) {
+                            primaryContainer = Color(0xFF065F46), onPrimaryContainer = Color.White)) {
                             PhmsIconBadge(vitalIconFor(type.name))
                         }
                         Text(type.name, modifier = Modifier.heightIn(min = 48.dp),
@@ -168,9 +170,12 @@ private fun HealthTrends(types: List<VitalTypeOption>, readings: List<VitalReadi
                             Text("No trend yet", style = MaterialTheme.typography.bodyMedium)
                         }
                         Text(latest?.let(::readingText) ?: "No readings yet",
-                            style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                            style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            color = if (latest?.isAbnormal == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                         Spacer(Modifier.weight(1f))
-                        Text("View trend", style = MaterialTheme.typography.labelLarge)
+                        PhmsOutlinedButton(onClick = { onOpen(type) }) {
+                            Text("View trend", maxLines = 1, softWrap = false)
+                        }
                     }
                 }
             }
@@ -185,12 +190,13 @@ private fun VitalTrendDetail(type: VitalTypeOption, readings: List<VitalReadingI
     val latest = latestRecordedReading(readings)
     MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
         background = Color.White, surface = Color.White, surfaceContainer = Color.White,
-        primaryContainer = Color(0xFFFFDF48), onPrimaryContainer = Color.Black)) {
+        primaryContainer = Color(0xFF065F46), onPrimaryContainer = Color.White)) {
         Surface(color = Color.White, modifier = Modifier.fillMaxSize()) {
             PhmsPage {
                 PhmsScreenHeader(type.name, icon = vitalIconFor(type.name), onBack = onBack)
                 Text("Latest reading", style = MaterialTheme.typography.bodyMedium)
-                Text(latest?.let(::readingText) ?: "No reading yet", style = MaterialTheme.typography.headlineMedium)
+                Text(latest?.let(::readingText) ?: "No reading yet", style = MaterialTheme.typography.headlineMedium,
+                    color = if (latest?.isAbnormal == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                 latest?.let {
                     Text(it.recordedAt, style = MaterialTheme.typography.bodyMedium)
                     readingComparison(readings, it)?.let { comparison -> Text(comparison, style = MaterialTheme.typography.bodyMedium) }

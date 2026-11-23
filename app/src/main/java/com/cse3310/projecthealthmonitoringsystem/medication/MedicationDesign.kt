@@ -22,18 +22,18 @@ import androidx.compose.ui.unit.sp
 import com.cse3310.projecthealthmonitoringsystem.monitoring.DoseTimes
 import java.util.Calendar
 
-internal val MedicationYellow = Color(0xFFFFDF48)
-internal val MedicationInk = Color(0xFF111827)
+internal val MedicationYellow = Color(0xFF065F46)
+internal val MedicationInk = Color(0xFF0F172A)
 internal val MedicationBorder = Color(0xFFE8E1D8)
 
 /** Scoped to Medication: preserves the global fonts, security UI and other feature screens. */
 @Composable
 internal fun MedicationDesign(content: @Composable () -> Unit) {
     val colors = MaterialTheme.colorScheme.copy(
-        primary = MedicationYellow, onPrimary = MedicationInk,
-        primaryContainer = MedicationYellow, onPrimaryContainer = MedicationInk,
-        secondaryContainer = Color(0xFFFEF9C3), onSecondaryContainer = MedicationInk,
-        background = Color(0xFFFCFAF8), onBackground = MedicationInk,
+        primary = MedicationYellow, onPrimary = Color.White,
+        primaryContainer = MedicationYellow, onPrimaryContainer = Color.White,
+        secondaryContainer = Color(0xFFD1FAE5), onSecondaryContainer = MedicationInk,
+        background = Color(0xFFF8FAFC), onBackground = MedicationInk,
         surface = Color.White, onSurface = MedicationInk, onSurfaceVariant = MedicationInk,
         outline = MedicationBorder, outlineVariant = MedicationBorder)
     MaterialTheme(colorScheme = colors, typography = MaterialTheme.typography.copy(

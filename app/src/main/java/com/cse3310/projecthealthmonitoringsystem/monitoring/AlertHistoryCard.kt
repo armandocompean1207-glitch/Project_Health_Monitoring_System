@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsCard
-import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsTextButton
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsOutlinedButton
 
 /** History summary only; the existing details dialog retains full guidance and record information. */
 @Composable
@@ -25,12 +25,12 @@ internal fun AlertHistoryCard(content: PresentedAlert, acknowledgedAt: Long?, on
             Icon(Icons.Outlined.WarningAmber, "Health alert", tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 4.dp).size(20.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(content.title, style = MaterialTheme.typography.titleSmall, color = Color(0xFF111827))
-                content.recorded?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF111827)) }
+                Text(content.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.error)
+                content.recorded?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF0F172A)) }
                 Text(acknowledgedAt?.let { "Acknowledged · ${alertDate(it)}" } ?: "Not acknowledged",
-                    style = MaterialTheme.typography.bodySmall, color = Color(0xFF111827))
+                    style = MaterialTheme.typography.bodySmall, color = Color(0xFF0F172A))
             }
-            PhmsTextButton(onClick = onView, contentPadding = PaddingValues(horizontal = 6.dp)) {
+            PhmsOutlinedButton(onClick = onView, modifier = Modifier.align(Alignment.CenterVertically)) {
                 Text("View", maxLines = 1, softWrap = false)
             }
         }

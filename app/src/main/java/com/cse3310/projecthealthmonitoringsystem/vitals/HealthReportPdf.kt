@@ -40,7 +40,7 @@ internal fun writeHealthReport(context: Context, report: HealthReportSnapshot): 
     val directory = File(context.cacheDir, "health_reports").apply { mkdirs() }
     val file = File(directory, "PHMS-health-report-${java.util.UUID.randomUUID()}.pdf")
     val document = PdfDocument()
-    val ink = Color.rgb(17, 24, 39)
+    val ink = Color.rgb(15, 23, 42)
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textSize = 11f; typeface = Typeface.create("sans-serif", Typeface.NORMAL) }
     var pageNumber = 0
     var page: PdfDocument.Page? = null
@@ -57,7 +57,7 @@ internal fun writeHealthReport(context: Context, report: HealthReportSnapshot): 
         pageNumber++
         page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, pageNumber).create())
         page!!.canvas.drawColor(Color.WHITE)
-        page!!.canvas.drawRect(36f, 24f, 559f, 28f, Paint().apply { color = Color.rgb(255, 223, 72) })
+        page!!.canvas.drawRect(36f, 24f, 559f, 28f, Paint().apply { color = Color.rgb(6, 95, 70) })
         page!!.canvas.drawText("PHMS · My Health Report", 36f, 48f, text)
         y = 72f
     }

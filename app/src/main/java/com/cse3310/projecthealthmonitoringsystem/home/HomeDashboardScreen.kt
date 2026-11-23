@@ -61,6 +61,7 @@ data class HomeVitalRecord(
     val recordedAt: String,
     val recentValues: List<Float> = emptyList(),
     val isAbnormal: Boolean = false,
+    val hasActiveAlert: Boolean = false,
 )
 
 data class HomeAppointment(
@@ -152,6 +153,8 @@ fun HomeDashboardRoute(
         )
     }
 
+    val activeVitalIds = alerts.filter { it.acknowledgedAt == null }.mapNotNull { it.vitalId }.toSet()
+
     fun latestVital(query: String): HomeVitalRecord? {
         val matches = vitalReadings.filter { it.typeName.contains(query, ignoreCase = true) }.sortedByDescending { it.vital.recordedAt }
         val latest = matches.firstOrNull() ?: return null
@@ -167,6 +170,7 @@ fun HomeDashboardRoute(
                 .format(Date(latest.vital.recordedAt)),
             recentValues = matches.take(7).asReversed().map { it.vital.value.toFloat() },
             isAbnormal = latest.vital.isAbnormal,
+            hasActiveAlert = matches.any { it.vital.vitalId in activeVitalIds },
         )
     }
 

@@ -20,7 +20,7 @@ internal fun UpdateOption(title: String, warning: Boolean, onClick: () -> Unit) 
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (warning) Icon(Icons.Outlined.WarningAmber, "Health alert", tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(24.dp))
-            Text(title, style = MaterialTheme.typography.bodyLarge, color = Color(0xFF111827))
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = Color(0xFF0F172A))
         }
     }
 }

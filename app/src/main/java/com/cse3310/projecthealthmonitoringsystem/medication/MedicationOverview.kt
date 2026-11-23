@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsOutlinedButton as OutlinedButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -107,13 +108,16 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Today", "Medicines", "History").forEachIndexed { index, label ->
+            listOf("Today", "Medicines", "History", "Vaccinations").forEachIndexed { index, label ->
                 FilterChip(selected = tab == index, onClick = { tab = index }, label = { Text(label) },
                     colors = FilterChipDefaults.filterChipColors(labelColor = MaterialTheme.colorScheme.onSurface,
                         selectedLabelColor = MaterialTheme.colorScheme.onSurface))
             }
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (tab == 3) {
+            com.cse3310.projecthealthmonitoringsystem.healthguide.VaccinationsSection()
+        } else {
         MedicationReminderCard(day)
         if (tab == 0) {
             PhmsSectionHeader("Today's schedule")
@@ -139,28 +143,15 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
                 OutlinedCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(DoseTimes.displayClock(Calendar.getInstance().apply { timeInMillis = at }.let {
-                                    it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }), style = MaterialTheme.typography.labelMedium)
-                                Surface(shape = CircleShape, color = MedicationYellow, modifier = Modifier.size(40.dp)) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(when (status) {
-                                            DoseStatus.TAKEN -> Icons.Outlined.CheckCircle
-                                            DoseStatus.MISSED -> Icons.Outlined.Cancel
-                                            else -> Icons.Outlined.Schedule
-                                        }, label, modifier = Modifier.size(24.dp),
-                                            tint = when (status) {
-                                                DoseStatus.MISSED -> MaterialTheme.colorScheme.error
-                                                DoseStatus.TAKEN -> MedicationTakenGreen
-                                                else -> MedicationInk
-                                            })
-                                    }
-                                }
-                            }
-                            Column(Modifier.weight(1f)) {
+                            PhmsIconBadge(PhmsIcons.Medication)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(row?.medicationName ?: med?.name ?: "Medication", style = MaterialTheme.typography.titleMedium)
                                 Text(row?.dosage ?: med?.dosage.orEmpty())
+                                Text(DoseTimes.displayClock(Calendar.getInstance().apply { timeInMillis = at }.let {
+                                    it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }), style = MaterialTheme.typography.labelMedium)
+
                             }
+
                             if (state != MedicationIntakeState.TAKEN) Text(label, style = MaterialTheme.typography.labelLarge,
                                 color = if (status == DoseStatus.MISSED) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                         }
@@ -170,24 +161,31 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
                         val final = status in listOf(DoseStatus.TAKEN, DoseStatus.SKIPPED, DoseStatus.MISSED)
                         if (state == MedicationIntakeState.TAKEN) TakenIntakeStatus(row?.dose?.recordedAt)
                         if (state != MedicationIntakeState.TAKEN && state != MedicationIntakeState.SKIPPED) {
-                            Button(enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = MedicationYellow, contentColor = MedicationInk),
-                                onClick = {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+                                itemVerticalAlignment = Alignment.CenterVertically) {
+                                Button(enabled = !busy, modifier = Modifier.heightIn(min = 48.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MedicationYellow, contentColor = Color.White),
+                                    onClick = {
+                                        error = null
+                                        entry = DoseEntry(medId, at, DoseStatus.TAKEN, null, revision, final)
+                                    }) { Text("Mark as taken", maxLines = 1, softWrap = false) }
+                                OutlinedButton(enabled = !busy, onClick = {
                                     error = null
-                                    entry = DoseEntry(medId, at, DoseStatus.TAKEN, null, revision, final)
-                                }) { Text("Mark as taken") }
-                            TextButton(enabled = !busy, onClick = {
+                                    entry = DoseEntry(medId, at, DoseStatus.SKIPPED, null, revision, final)
+                                }) { Text("Skip dose", maxLines = 1, softWrap = false) }
+                            }
+                        }
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (final) OutlinedButton(enabled = !busy, onClick = {
                                 error = null
-                                entry = DoseEntry(medId, at, DoseStatus.SKIPPED, null, revision, final)
-                            }) { Text("Skip dose") }
+                                entry = DoseEntry(medId, at, if (status == DoseStatus.MISSED) DoseStatus.TAKEN else status!!,
+                                    row?.dose?.recordedAt, revision, true)
+                            }) { Text("Correct entry", maxLines = 1, softWrap = false) }
+                            row?.dose?.doseId?.let { doseId ->
+                                OutlinedButton(onClick = { showHistory(doseId) }) { Text("Entry history", maxLines = 1, softWrap = false) }
+                            }
                         }
-                        if (final) TextButton(enabled = !busy, onClick = {
-                            error = null
-                            entry = DoseEntry(medId, at, if (status == DoseStatus.MISSED) DoseStatus.TAKEN else status!!,
-                                row?.dose?.recordedAt, revision, true)
-                        }) { Text("Correct entry") }
-                        row?.dose?.doseId?.let { doseId ->
-                            TextButton(onClick = { showHistory(doseId) }) { Text("Entry history") }
-                        }
+
                     }
                 }
             }
@@ -204,10 +202,10 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
                         Text(MedicationTimes.forEditing(med).joinToString(" · ", transform = DoseTimes::displayClock))
                         if (med.instructions.isNotBlank()) Text(med.instructions)
                         MedicationPrescriptionDetails(med, providers, pharmacies)
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if (med.isActive) TextButton(onClick = { onEdit(med) }) { Text("Edit") }
-                            TextButton(onClick = { onAudit(med) }) { Text("Changes") }
-                            if (med.isActive) TextButton(onClick = { onDeactivate(med) }) { Text("Deactivate") }
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (med.isActive) OutlinedButton(onClick = { onEdit(med) }) { Text("Edit", maxLines = 1, softWrap = false) }
+                            OutlinedButton(onClick = { onAudit(med) }) { Text("Changes", maxLines = 1, softWrap = false) }
+                            if (med.isActive) OutlinedButton(onClick = { onDeactivate(med) }) { Text("Deactivate", maxLines = 1, softWrap = false) }
                         }
                     }
                 }
@@ -230,18 +228,19 @@ fun MedicationOverview(onAdd: () -> Unit, onEdit: (Medication) -> Unit, onAudit:
                                 all.any { it.medicationId == row.dose.medicationId && it.isActive }).label)
                             row.dose.recordedAt?.let { Text("Recorded ${intakeDateTime(it)}") }
                         }
-                        Row {
-                            TextButton(enabled = !busy, onClick = {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(enabled = !busy, onClick = {
                                 error = null
                                 entry = DoseEntry(row.dose.medicationId, row.dose.scheduledAt,
                                     if (row.dose.status in listOf(DoseStatus.MISSED, DoseStatus.SCHEDULED)) DoseStatus.TAKEN else row.dose.status,
                                     row.dose.recordedAt, latestCorrections[row.dose.doseId]?.correctionId ?: 0L, true)
-                            }) { Text("Correct entry") }
-                            TextButton(onClick = { showHistory(row.dose.doseId) }) { Text("Entry history") }
+                            }) { Text("Correct entry", maxLines = 1, softWrap = false) }
+                            OutlinedButton(onClick = { showHistory(row.dose.doseId) }) { Text("Entry history", maxLines = 1, softWrap = false) }
                         }
                     }
                 }
             }
+        }
         }
     }
     entry?.let { request ->

@@ -54,7 +54,7 @@ internal fun ReadingRangeSelector(period: ReadingPeriod, from: Long, to: Long,
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ReadingPeriod.entries.forEach { choice ->
             FilterChip(selected = period == choice, onClick = { onChange(choice, from, to) },
-                label = { Text(choice.label, color = Color(0xFF111827)) })
+                label = { Text(choice.label, color = Color(0xFF0F172A)) })
         }
     }
     if (period == ReadingPeriod.CUSTOM) {
@@ -69,8 +69,8 @@ internal fun ReadingRangeSelector(period: ReadingPeriod, from: Long, to: Long,
 @Composable
 internal fun ReadingHistoryRows(readings: List<VitalReadingItem>) {
     readings.forEach { item ->
-        ListItem(headlineContent = { Text(readingText(item), color = Color(0xFF111827)) },
-            supportingContent = { Text(listOfNotNull(item.recordedAt, item.contextLabel).joinToString("\n"), color = Color(0xFF111827)) },
+        ListItem(headlineContent = { Text(readingText(item), color = if (item.isAbnormal) MaterialTheme.colorScheme.error else Color(0xFF0F172A)) },
+            supportingContent = { Text(listOfNotNull(item.recordedAt, item.contextLabel).joinToString("\n"), color = Color(0xFF0F172A)) },
             trailingContent = { if (item.isAbnormal) Icon(Icons.Outlined.WarningAmber, "Abnormal reading", tint = MaterialTheme.colorScheme.error) },
             colors = ListItemDefaults.colors(containerColor = Color.White))
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
