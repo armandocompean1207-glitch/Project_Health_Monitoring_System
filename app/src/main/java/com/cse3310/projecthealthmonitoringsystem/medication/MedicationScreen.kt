@@ -1,11 +1,18 @@
 package com.cse3310.projecthealthmonitoringsystem.medication
 
 import android.Manifest
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import com.cse3310.projecthealthmonitoringsystem.ui.components.rememberGuardedDismiss
+import com.cse3310.projecthealthmonitoringsystem.validation.HealthValidation
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,13 +25,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsCard as Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsOutlinedButton as OutlinedButton
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsTextField as OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsTextButton as TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -51,14 +58,20 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun MedicationScreen() {
+    MedicationDesign { MedicationContent() }
+}
+
+@Composable
+private fun MedicationContent() {
     val context = LocalContext.current
     val app = context.phms()
     val userId = CurrentUser.userId
     val scope = rememberCoroutineScope()
-    remember { AlertSender.ensureChannel(context) }
+    androidx.compose.runtime.LaunchedEffect(context) { AlertSender.ensureChannel(context) }
 
-    val medications by remember { app.medicationRepository.observeActiveMedications(userId) }.collectAsState(initial = emptyList())
-    val doctors by remember { app.maintenanceRepository.observeDoctors(userId) }.collectAsState(initial = emptyList())
+    val medications by remember(userId) { app.medicationRepository.observeActiveMedications(userId) }.collectAsState(initial = emptyList())
+    val doctors by remember(userId) { app.maintenanceRepository.observeDoctors(userId) }.collectAsState(initial = emptyList())
+    val pharmacies by remember(userId) { app.maintenanceRepository.observePharmacies(userId) }.collectAsState(initial = emptyList())
     val today = remember { DoseTimes.todayRange() }
     val todayDoses by remember { app.medicationRepository.observeDoseLog(userId, today.first, today.second) }
         .collectAsState(initial = emptyList())
@@ -69,10 +82,30 @@ fun MedicationScreen() {
     var showForm by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var dosage by remember { mutableStateOf("") }
-    var intakeTime by remember { mutableStateOf("08:00") }
+    var doseTimes by remember { mutableStateOf<List<Int?>>(listOf(null)) }
+    var startDate by remember { mutableStateOf(MedicationTimes.dayStart(System.currentTimeMillis())) }
+    var endDate by remember { mutableStateOf<Long?>(null) }
+    var ongoing by remember { mutableStateOf(true) }
     var timesPerDay by remember { mutableStateOf(1) }
     var doctorId by remember { mutableStateOf<Long?>(null) }
+    var pharmacyId by remember { mutableStateOf<Long?>(null) }
+    var pharmacyTouched by remember { mutableStateOf(false) }
+    var addingPharmacy by remember { mutableStateOf(false) }
+    var addingProvider by remember { mutableStateOf(false) }
+    var choosingProvider by remember { mutableStateOf(false) }
+    var prescriptionNumber by remember { mutableStateOf("") }
+    var refillsRemaining by remember { mutableStateOf("") }
+    var nextRefillAt by remember { mutableStateOf<Long?>(null) }
+    var treatmentDatesValid by remember { mutableStateOf(true) }
+    var refillDateValid by remember { mutableStateOf(true) }
+    androidx.compose.runtime.LaunchedEffect(pharmacies, showForm, editing) {
+        if (showForm && editing == null && !pharmacyTouched && pharmacyId == null)
+            pharmacyId = pharmacies.firstOrNull { it.isPreferred }?.pharmacyId
+    }
     var formError by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    var checking by remember { mutableStateOf(false) }
+    val dismissForm = rememberGuardedDismiss(showForm, saving || checking) { showForm = false }
 
     var pendingConflicts by remember { mutableStateOf<List<CandidateConflict>>(emptyList()) }
     var deleting by remember { mutableStateOf<Medication?>(null) }
@@ -85,22 +118,38 @@ fun MedicationScreen() {
         editing = med
         name = med?.name ?: ""
         dosage = med?.dosage ?: ""
-        intakeTime = med?.let { DoseTimes.timeText(it.intakeTimeMinutes) } ?: "08:00"
+        doseTimes = med?.let { MedicationTimes.forEditing(it) } ?: listOf(null)
+        startDate = med?.startDate ?: MedicationTimes.dayStart(System.currentTimeMillis())
+        endDate = med?.endDate
+        ongoing = med?.endDate == null
         timesPerDay = med?.let { Frequency.timesPerDay(it.frequency) } ?: 1
         doctorId = med?.doctorId
+        pharmacyId = if (med == null) pharmacies.firstOrNull { it.isPreferred }?.pharmacyId else med.pharmacyId
+        pharmacyTouched = false
+        prescriptionNumber = med?.prescriptionNumber.orEmpty()
+        refillsRemaining = med?.refillsRemaining?.toString().orEmpty()
+        nextRefillAt = med?.nextRefillAt
+        treatmentDatesValid = true; refillDateValid = true
         formError = null
         showForm = true
     }
 
-    fun validate(): String? = when {
-        name.isBlank() -> "Enter a medication name."
-        dosage.isBlank() -> "Enter a dosage, for example 5 mg."
-        DoseTimes.minutesOf(intakeTime) == null -> "Enter the intake time as HH:mm, for example 08:30."
-        else -> null
-    }
+    fun validate(): String? =
+        (if (!treatmentDatesValid || !refillDateValid) "Enter valid dates as MM/DD/YYYY." else null)
+            ?: MedicationTimes.error(doseTimes, timesPerDay, startDate, if (ongoing) null else endDate, ongoing)
+            ?: HealthValidation.medication(name, dosage, Frequency.label(timesPerDay), doseTimes.firstOrNull() ?: -1)
+            ?: com.cse3310.projecthealthmonitoringsystem.validation.ProviderPharmacyValidation.refillInput(refillsRemaining)
+            ?: com.cse3310.projecthealthmonitoringsystem.validation.ProviderPharmacyValidation.prescription(
+                prescriptionNumber, refillsRemaining.toIntOrNull(), nextRefillAt)
 
     fun save(reportConflicts: Boolean) {
-        val minutes = DoseTimes.minutesOf(intakeTime) ?: return
+        if (saving) return
+        formError = validate()
+        if (formError != null) return
+        val selectedTimes = doseTimes.filterNotNull().sorted()
+        val minutes = selectedTimes.first()
+        val encodedTimes = MedicationTimes.encode(selectedTimes)
+        saving = true
         val current = editing
         scope.launch {
             try {
@@ -112,26 +161,23 @@ fun MedicationScreen() {
                         dosage = dosage.trim(),
                         frequency = Frequency.label(timesPerDay),
                         intakeTimeMinutes = minutes,
-                        startDate = now,
+                        startDate = startDate,
+                        endDate = if (ongoing) null else endDate,
+                        doseTimesMinutes = encodedTimes,
                         doctorId = doctorId,
+                        pharmacyId = pharmacyId,
+                        prescriptionNumber = prescriptionNumber.trim().ifBlank { null },
+                        refillsRemaining = refillsRemaining.toIntOrNull(),
+                        nextRefillAt = nextRefillAt,
                         createdAt = now,
                         updatedAt = now
                     )
                     val id = app.medicationRepository.addMedication(userId, med)
                     if (id == null) {
-                        toast("Could not save: pick one of your doctors.")
+                        toast("Could not save: check the selected provider and pharmacy.")
                         return@launch
                     }
                     DoseAlarms.scheduleNextReminder(context, med.copy(medicationId = id))
-                    if (reportConflicts) {
-                        val pairs = app.medicationRepository.detectConflicts(userId)
-                            .filter { it.medicationIdA == id || it.medicationIdB == id }
-                        app.monitoringRepository.raiseConflictAlerts(userId, pairs)
-                            .filter { it > 0 }
-                            .forEach { alertId ->
-                                app.monitoringRepository.getAlert(userId, alertId)?.let { AlertHandoff.send(context, it) }
-                            }
-                    }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !AlertSender.canNotify(context)) {
                         permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
@@ -141,7 +187,14 @@ fun MedicationScreen() {
                         dosage = dosage.trim(),
                         frequency = Frequency.label(timesPerDay),
                         intakeTimeMinutes = minutes,
-                        doctorId = doctorId
+                        startDate = startDate,
+                        endDate = if (ongoing) null else endDate,
+                        doseTimesMinutes = encodedTimes,
+                        doctorId = doctorId,
+                        pharmacyId = pharmacyId,
+                        prescriptionNumber = prescriptionNumber.trim().ifBlank { null },
+                        refillsRemaining = refillsRemaining.toIntOrNull(),
+                        nextRefillAt = nextRefillAt
                     )
                     if (!app.medicationRepository.editMedication(userId, updated)) {
                         toast("Could not save the changes.")
@@ -150,21 +203,40 @@ fun MedicationScreen() {
                     DoseAlarms.cancelReminder(context, current.medicationId)
                     DoseAlarms.scheduleNextReminder(context, updated)
                 }
+                if (reportConflicts) {
+                    app.monitoringRepository.raiseConflictAlerts(userId, app.medicationRepository.detectConflicts(userId))
+                        .filter { it > 0 }.forEach { alertId ->
+                            app.monitoringRepository.getAlert(userId, alertId)?.let { AlertHandoff.send(context, it) }
+                        }
+                }
                 toast("Medication saved")
                 showForm = false
-            } catch (e: IllegalArgumentException) {
-                formError = e.message
-            }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                formError = e.message ?: "Could not save medication. Please try again."
+            } finally { saving = false }
         }
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxSize().imePadding().padding(horizontal = 16.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("Medication", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(top = 16.dp))
-            Text("Your medications and dose reminders.", style = MaterialTheme.typography.bodyMedium)
+            if (showForm) com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsScreenHeader(
+                if (showForm) if (editing == null) "Add medication" else "Edit medication" else "Medication",
+                if (showForm) null else "Your medicines and daily schedule.",
+                com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsIcons.Medication,
+                if (showForm) dismissForm else null)
+            else MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
+                primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFDF48),
+                onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF111827))) {
+                com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsScreenHeader(
+                    "Medication", "Your medicines and daily schedule.",
+                    com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsIcons.Medication)
+            }
         }
 
         if (!showForm) {
@@ -173,37 +245,54 @@ fun MedicationScreen() {
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(if (editing == null) "Add medication" else "Edit medication", style = MaterialTheme.typography.titleMedium)
-                        OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(dosage, { dosage = it }, label = { Text("Dosage (e.g. 5 mg)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(intakeTime, { intakeTime = it }, label = { Text("First intake time (HH:mm)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(name, { name = it }, label = { Text("Name") }, enabled = !saving && !checking,
+                            isError = formError != null && HealthValidation.name(name) != null,
+                            supportingText = { if (formError != null) HealthValidation.name(name)?.let { Text(it) } }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(dosage, { dosage = it }, label = { Text("Dose (for example, 5 mg)") }, enabled = !saving && !checking,
+                            isError = formError != null && HealthValidation.medication(name, dosage, Frequency.label(timesPerDay), doseTimes.firstOrNull() ?: -1) != null,
+                            singleLine = true, modifier = Modifier.fillMaxWidth())
+                        MedicationTreatmentDates(startDate, endDate, ongoing, !saving && !checking,
+                            onStart = { startDate = it }, onEnd = { endDate = it }, onOngoing = { ongoing = it },
+                            showErrors = formError != null, onValidityChange = { treatmentDatesValid = it })
                         Text("How often")
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            (1..4).forEach { n ->
-                                FilterChip(selected = timesPerDay == n, onClick = { timesPerDay = n }, label = { Text("${n}x a day") })
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            (1..6).forEach { n ->
+                                FilterChip(selected = timesPerDay == n, enabled = !saving && !checking, onClick = {
+                                    doseTimes = List(n) { index -> doseTimes.getOrNull(index) }
+                                    timesPerDay = n
+                                }, label = { Text("${n}x a day") })
                             }
                         }
-                        Text("Prescribing doctor")
-                        if (doctors.isEmpty()) {
-                            Text("No doctors yet. Add them in Data Maintenance.", style = MaterialTheme.typography.bodySmall)
-                        } else {
-                            Row(
-                                Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                FilterChip(selected = doctorId == null, onClick = { doctorId = null }, label = { Text("None") })
+                        MedicationDoseTimeFields(doseTimes, !saving && !checking, formError != null) { index, minutes ->
+                            doseTimes = doseTimes.mapIndexed { position, old -> if (position == index) minutes else old }
+                        }
+                        Text("Prescribing provider (optional)")
+                        androidx.compose.foundation.layout.Box {
+                            OutlinedButton(enabled = !saving && !checking, modifier = Modifier.fillMaxWidth(),
+                                onClick = { choosingProvider = true }) {
+                                Text(doctors.firstOrNull { it.doctor.doctorId == doctorId }?.doctor?.name ?: "None",
+                                    Modifier.weight(1f))
+                                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.ExpandMore, "Choose provider")
+                            }
+                            androidx.compose.material3.DropdownMenu(choosingProvider, onDismissRequest = { choosingProvider = false }) {
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("None") },
+                                    onClick = { doctorId = null; choosingProvider = false })
                                 doctors.forEach { d ->
-                                    FilterChip(
-                                        selected = doctorId == d.doctor.doctorId,
-                                        onClick = { doctorId = d.doctor.doctorId },
-                                        label = { Text(d.doctor.name) }
-                                    )
+                                    androidx.compose.material3.DropdownMenuItem(text = { Text(d.doctor.name) },
+                                        onClick = { doctorId = d.doctor.doctorId; choosingProvider = false })
                                 }
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("+ Add provider") },
+                                    onClick = { choosingProvider = false; addingProvider = true })
                             }
                         }
+                        MedicationPrescriptionFields(pharmacies, pharmacyId, prescriptionNumber, refillsRemaining, nextRefillAt,
+                            enabled = !saving && !checking,
+                            onPharmacy = { pharmacyTouched = true; pharmacyId = it },
+                            onRx = { prescriptionNumber = it }, onRefills = { refillsRemaining = it }, onDate = { nextRefillAt = it },
+                            onAddPharmacy = { addingPharmacy = true }, onDateValidityChange = { refillDateValid = it })
                         formError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = {
+                            Button(enabled = !saving && !checking, onClick = {
                                 formError = validate()
                                 if (formError == null) {
                                     val current = editing
@@ -211,72 +300,38 @@ fun MedicationScreen() {
                                     if (!nameChanged) {
                                         save(reportConflicts = false)
                                     } else {
+                                        checking = true
                                         scope.launch {
-                                            val conflicts = app.medicationRepository.detectConflict(
-                                                userId, name, current?.medicationId ?: 0
-                                            )
-                                            if (conflicts.isEmpty()) save(reportConflicts = false) else pendingConflicts = conflicts
+                                            try {
+                                                val conflicts = app.medicationRepository.detectConflict(
+                                                    userId, name, current?.medicationId ?: 0)
+                                                if (conflicts.isEmpty()) save(reportConflicts = false) else pendingConflicts = conflicts
+                                            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+                                            } catch (e: Exception) { formError = "Couldn't check this medication. Please try again."
+                                            } finally { checking = false }
                                         }
                                     }
                                 }
                             }) { Text("Save") }
-                            OutlinedButton(onClick = { showForm = false }) { Text("Cancel") }
+                            OutlinedButton(enabled = !saving && !checking, onClick = dismissForm) { Text("Cancel") }
                         }
                     }
                 }
             }
         }
 
-        item { Text("Today's doses", style = MaterialTheme.typography.titleLarge) }
-        if (todayDoses.isEmpty()) {
-            item { Text("No doses yet today. A dose appears here when its reminder goes off.") }
-        }
-        items(todayDoses, key = { "dose-${it.dose.doseId}" }) { row ->
-            Card(Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("${row.medicationName} · ${row.dosage}", style = MaterialTheme.typography.titleMedium)
-                        Text(DoseTimes.formatTime(row.dose.scheduledAt), style = MaterialTheme.typography.bodySmall)
+        if (!showForm) item {
+            MedicationOverview(
+                onAdd = { openForm(null) },
+                onEdit = { openForm(it) },
+                onAudit = { med ->
+                    scope.launch {
+                        history = app.medicationRepository.getAuditLog(userId, med.medicationId)
+                        historyFor = med
                     }
-                    if (row.dose.status == DoseStatus.SCHEDULED) {
-                        Button(onClick = {
-                            scope.launch {
-                                if (app.medicationRepository.markDoseTaken(userId, row.dose.doseId)) {
-                                    DoseAlarms.cancelMissedCheck(context, row.dose.doseId)
-                                }
-                            }
-                        }) { Text("Mark taken") }
-                    } else {
-                        AssistChip(onClick = {}, label = { Text(if (row.dose.status == DoseStatus.TAKEN) "Taken" else "Missed") })
-                    }
-                }
-            }
-        }
-
-        item { Text("My medications", style = MaterialTheme.typography.titleLarge) }
-        if (medications.isEmpty()) {
-            item { Text("No medications yet.") }
-        }
-        items(medications, key = { "med-${it.medicationId}" }) { med ->
-            val doctorName = doctors.firstOrNull { it.doctor.doctorId == med.doctorId }?.doctor?.name
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("${med.name} · ${med.dosage}", style = MaterialTheme.typography.titleMedium)
-                    Text("${med.frequency}, starting ${DoseTimes.timeText(med.intakeTimeMinutes)}")
-                    if (doctorName != null) Text("Prescribed by $doctorName")
-                    Text("Next reminder: ${DoseTimes.formatTime(DoseAlarms.nextReminderTime(med))}", style = MaterialTheme.typography.bodySmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = { openForm(med) }) { Text("Edit") }
-                        TextButton(onClick = {
-                            scope.launch {
-                                history = app.medicationRepository.getAuditLog(userId, med.medicationId)
-                                historyFor = med
-                            }
-                        }) { Text("History") }
-                        TextButton(onClick = { deleting = med }) { Text("Delete") }
-                    }
-                }
-            }
+                },
+                onDeactivate = { deleting = it }
+            )
         }
         item { Text("") }
     }
@@ -300,32 +355,37 @@ fun MedicationScreen() {
                 TextButton(onClick = {
                     pendingConflicts = emptyList()
                     save(reportConflicts = true)
-                }) { Text("Save and alert designees") }
+                }) { Text("Save and notify contacts") }
             },
             dismissButton = { TextButton(onClick = { pendingConflicts = emptyList() }) { Text("Cancel") } }
         )
     }
 
+    if (addingPharmacy) com.cse3310.projecthealthmonitoringsystem.maintenance.PharmacyEditor(
+        com.cse3310.projecthealthmonitoringsystem.data.entity.Pharmacy(userId = userId, name = ""),
+        onDismiss = { addingPharmacy = false },
+        onSaved = { pharmacyId = it; pharmacyTouched = true; addingPharmacy = false })
+    if (addingProvider) com.cse3310.projecthealthmonitoringsystem.maintenance.ProviderEditor(
+        com.cse3310.projecthealthmonitoringsystem.data.entity.Doctor(userId = userId, name = ""),
+        onDismiss = { addingProvider = false },
+        onSaved = { doctorId = it; addingProvider = false })
+
     deleting?.let { med ->
         AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text("Delete ${med.name}?") },
-            text = { Text("Its reminders will stop. If it already has doses, they stay in your history.") },
+            title = { Text("Deactivate ${med.name}?") },
+            text = { Text("Future reminders will stop. The medication and all dose history will be retained. Existing pending doses keep their monitoring checks.") },
             confirmButton = {
                 TextButton(onClick = {
                     deleting = null
                     scope.launch {
-                        val result = app.medicationRepository.deleteMedication(userId, med.medicationId)
+                        val result = app.medicationRepository.deactivateMedication(userId, med.medicationId)
                         DoseAlarms.cancelReminder(context, med.medicationId)
                         toast(
-                            when (result) {
-                                MedicationRepository.DeleteResult.DELETED -> "Medication deleted"
-                                MedicationRepository.DeleteResult.DEACTIVATED -> "Medication stopped. Past doses are kept."
-                                MedicationRepository.DeleteResult.NOT_FOUND -> "Medication not found"
-                            }
+                            if (result) "Medication deactivated. Past doses are kept." else "Medication not found"
                         )
                     }
-                }) { Text("Delete") }
+                }) { Text("Deactivate") }
             },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }
         )
@@ -336,7 +396,7 @@ fun MedicationScreen() {
             onDismissRequest = { historyFor = null },
             title = { Text("Change history: ${med.name}") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (history.isEmpty()) Text("No changes since it was added.")
                     history.forEach {
                         Text("${DoseTimes.formatTime(it.changedAt)}: ${it.field} changed from \"${it.oldValue ?: ""}\" to \"${it.newValue ?: ""}\"")

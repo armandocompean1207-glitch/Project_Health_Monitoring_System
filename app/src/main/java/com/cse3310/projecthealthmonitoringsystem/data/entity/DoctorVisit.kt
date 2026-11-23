@@ -1,5 +1,6 @@
 package com.cse3310.projecthealthmonitoringsystem.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -19,5 +20,9 @@ data class DoctorVisit(
     val doctorId: Long,
     val visitAt: Long,
     val reason: String = "",
-    val notes: String = ""
+    val notes: String = "",
+    @ColumnInfo(defaultValue = "0") val reminderMask: Int = 10,
+    @ColumnInfo(defaultValue = "0") val reminderSentMask: Int = 0,
+    @ColumnInfo(defaultValue = "0") val reminderVersion: Long = 0,
+    @ColumnInfo(defaultValue = "0") val cancelled: Boolean = false
 )

@@ -41,7 +41,7 @@ class NotesCommunicationMaintenanceTest : DbTest() {
     fun designeeAndDeliveryLog() = runBlocking<Unit> {
         val id = communication.addDesignee(A, Designee(userId = A, name = "Mom", phone = "8175550101", preferredMethod = ContactMethod.SMS))
         assertEquals(listOf("Mom"), communication.getDesignees(A).map { it.name })
-        assertTrue(communication.editDesignee(A, communication.getDesignee(A, id)!!.copy(preferredMethod = ContactMethod.EMAIL)))
+        assertTrue(communication.editDesignee(A, communication.getDesignee(A, id)!!.copy(preferredMethod = ContactMethod.EMAIL, email = "fictional@example.com")))
         assertEquals(ContactMethod.EMAIL, communication.observeDesignees(A).first().single().preferredMethod)
 
         val med = addMedication(A, "Aspirin")

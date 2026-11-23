@@ -1,16 +1,13 @@
 package com.cse3310.projecthealthmonitoringsystem.monitoring
 
-import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,11 +16,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsCard as Card
+import androidx.compose.material3.FilterChip
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsCard as OutlinedCard
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.LaunchedEffect
+import com.cse3310.projecthealthmonitoringsystem.ui.components.*
+import com.cse3310.projecthealthmonitoringsystem.data.dao.MedicationConflict
+import kotlinx.coroutines.CancellationException
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsOutlinedButton as OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsTextButton as TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,150 +46,164 @@ import com.cse3310.projecthealthmonitoringsystem.data.repository.MonitoringRepos
 import kotlinx.coroutines.launch
 
 @Composable
-fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}) {
+fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}, onAlertCommunication: (Long) -> Unit = { onOpenCommunication() }) {
     val context = LocalContext.current
     val app = context.phms()
     val userId = CurrentUser.userId
     val scope = rememberCoroutineScope()
-    remember { AlertSender.ensureChannel(context) }
+    LaunchedEffect(context) { AlertSender.ensureChannel(context) }
 
-    val alerts by remember { app.monitoringRepository.observeAlerts(userId) }.collectAsState(initial = emptyList())
-    val designees by remember { app.communicationRepository.observeDesignees(userId) }.collectAsState(initial = emptyList())
-    val medications by remember { app.medicationRepository.observeActiveMedications(userId) }.collectAsState(initial = emptyList())
+    val alerts by remember(userId) { app.monitoringRepository.observeAlerts(userId) }.collectAsState(initial = emptyList())
+    val designees by remember(userId) { app.communicationRepository.observeDesignees(userId) }.collectAsState(initial = emptyList())
+    val medications by remember(userId) { app.medicationRepository.observeActiveMedications(userId) }.collectAsState(initial = emptyList())
 
-    var permissionsOk by remember { mutableStateOf(AlertSender.canNotify(context) && AlertSender.canSendSms(context)) }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissionsOk = AlertSender.canNotify(context) && AlertSender.canSendSms(context) }
+    val preferences = com.cse3310.projecthealthmonitoringsystem.settings.rememberMeasurementPreferences()
+    val readings by remember(userId) { app.vitalsRepository.observeVitalSigns(userId) }.collectAsState(initial = emptyList())
+    val readingsById = readings.associateBy { it.vital.vitalId }
+    var needsContact by remember(userId) { mutableStateOf<Long?>(null) }
+    fun notifyPerson(alertId: Long) {
+        if (designees.isEmpty()) needsContact = alertId else onAlertCommunication(alertId)
+    }
 
     var viewing by remember { mutableStateOf<Alert?>(null) }
     var viewingLog by remember { mutableStateOf<List<CommunicationLog>>(emptyList()) }
 
-    fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+    var historyTab by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var conflicts by remember { mutableStateOf<List<MedicationConflict>>(emptyList()) }
+    var simulate by remember { mutableStateOf<com.cse3310.projecthealthmonitoringsystem.data.entity.Medication?>(null) }
+    LaunchedEffect(userId, medications) {
+        try { conflicts = app.medicationRepository.detectConflicts(userId) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { error = "Unable to load interaction rules." }
+    }
+    fun acknowledge(alert: Alert) {
+        scope.launch {
+            try { app.monitoringRepository.acknowledgeAlert(userId, alert.alertId) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { error = "Unable to acknowledge this alert." }
+        }
+    }
 
+
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
+        onSurface = androidx.compose.ui.graphics.Color(0xFF111827),
+        onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF111827),
+        primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFDF48),
+        onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF111827))) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            TextButton(onClick = onBack) { Text("← Back to More") }
-            Text("Monitoring", style = MaterialTheme.typography.headlineMedium)
-            Text(
-                "Missed doses and medication conflicts are sent to you and your designees.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            PhmsScreenHeader("Monitoring", "Your alerts and trusted contacts.", PhmsIcons.Alerts, onBack)
         }
-
         item {
-            if (!permissionsOk) {
-                SectionCard("Turn on alerts") {
-                    Text("Allow notifications and SMS so PHMS can alert you and your designees.")
-                    Button(onClick = {
-                        val perms = mutableListOf(Manifest.permission.SEND_SMS)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            perms += Manifest.permission.POST_NOTIFICATIONS
-                        }
-                        permissionLauncher.launch(perms.toTypedArray())
-                    }) { Text("Allow") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = !historyTab, onClick = { historyTab = false },
+                    label = { Text("Active (${alerts.count { it.acknowledgedAt == null }})") })
+                FilterChip(selected = historyTab, onClick = { historyTab = true }, label = { Text("History") })
+            }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+        val visible = alerts.filter { (it.acknowledgedAt != null) == historyTab }
+        if (visible.isEmpty()) item {
+            PhmsEmptyStateCard(if (historyTab) "No acknowledged alerts" else "No active alerts",
+                if (historyTab) "Acknowledged alerts stay here for reference." else "New alerts from recorded doses and readings appear here.",
+                PhmsIcons.Alerts, actionLabel = "Manage trusted contacts", onAction = onOpenCommunication)
+        }
+        items(visible, key = { it.alertId }) { alert ->
+            val content = presentAlert(alert, readingsById[alert.vitalId], preferences)
+            val showDetails: () -> Unit = {
+                scope.launch {
+                    try {
+                        viewingLog = app.communicationRepository.getLogsForAlert(userId, alert.alertId)
+                        viewing = alert
+                    } catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { error = "Unable to load alert details." }
                 }
             }
-        }
-
-        item { Text("Alerts", style = MaterialTheme.typography.titleLarge) }
-        if (alerts.isEmpty()) {
-            item { Text("No alerts yet.") }
-        }
-        items(alerts, key = { "alert-${it.alertId}" }) { alert ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            AlertHandoff.title(alert.type),
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        AssistChip(onClick = {}, label = { Text(if (alert.acknowledgedAt != null) "Acknowledged" else "New") })
-                    }
-                    Text(DoseTimes.formatTime(alert.createdAt), style = MaterialTheme.typography.bodySmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = {
-                            scope.launch {
-                                viewingLog = app.communicationRepository.getLogsForAlert(userId, alert.alertId)
-                                viewing = alert
-                            }
-                        }) { Text("View details") }
-                        if (alert.acknowledgedAt == null) {
-                            TextButton(onClick = {
-                                scope.launch { app.monitoringRepository.acknowledgeAlert(userId, alert.alertId) }
-                            }) { Text("Acknowledge") }
-                        }
-                    }
-                }
-            }
-        }
-
-        item { Text("Designees", style = MaterialTheme.typography.titleLarge) }
-        items(designees, key = { "designee-${it.designeeId}" }) { d ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("${d.name} (${d.relationship.ifBlank { "designee" }})", style = MaterialTheme.typography.titleMedium)
-                    if (d.phone.isNotBlank()) Text(d.phone)
-                    if (d.email.isNotBlank()) Text(d.email)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (d.phone.isNotBlank()) {
-                            TextButton(onClick = { openApp(context, AlertSender.smsIntent(d.phone, "Checking in from PHMS.")) }) { Text("Text") }
-                            TextButton(onClick = { openApp(context, AlertSender.dialIntent(d.phone)) }) { Text("Call") }
-                        }
-                        if (d.email.isNotBlank()) {
-                            TextButton(onClick = {
-                                openApp(context, AlertSender.emailIntent(d.email, "PHMS update", alerts.firstOrNull()?.message ?: "No alerts at this time."))
-                            }) { Text("Email") }
-                        }
-                        TextButton(onClick = {
-                            scope.launch { app.communicationRepository.deleteDesignee(userId, d.designeeId) }
-                        }) { Text("Remove") }
-                    }
-                }
+            if (historyTab) {
+                AlertHistoryCard(content, alert.acknowledgedAt, showDetails)
+            } else {
+                AlertSummary(content, onDetails = showDetails,
+                    onAcknowledge = if (alert.acknowledgedAt == null) ({ acknowledge(alert) }) else null,
+                    onNotify = { notifyPerson(alert.alertId) })
             }
         }
         item {
-            if (designees.isEmpty()) Text("No designees yet.")
-            OutlinedButton(onClick = onOpenCommunication) { Text("Add or edit designees") }
+            PhmsSectionHeader("Medication interactions", supportingText = "Check for potential interactions between your recorded medications.")
+            Text("This limited check cannot guarantee medication safety. Ask your provider or pharmacist.",
+                style = MaterialTheme.typography.bodySmall)
         }
-
-        if (medications.isNotEmpty()) {
+        if (conflicts.isEmpty()) item { Text("No potential interactions found in the available checks.",
+            style = MaterialTheme.typography.bodyMedium) }
+        items(conflicts) { pair ->
+            OutlinedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${pair.medicationNameA} + ${pair.medicationNameB}", style = MaterialTheme.typography.titleMedium)
+                    Text("Rule severity: ${pair.severity}", style = MaterialTheme.typography.labelLarge,
+                        color = if (pair.severity.equals("HIGH", true)) MaterialTheme.colorScheme.error else com.cse3310.projecthealthmonitoringsystem.ui.theme.PhmsWarning)
+                    Text(pair.description, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+        item { PhmsActionCard("Trusted contacts", "${designees.size} saved · Manage contacts or choose how to reach them.",
+            PhmsIcons.Communication, onOpenCommunication) }
+        if (com.cse3310.projecthealthmonitoringsystem.auth.AccountSession.isDebug(context) &&
+            userId == com.cse3310.projecthealthmonitoringsystem.data.SeedData.DEBUG_USER_ID) {
             item {
-                SectionCard("Demo: simulate a missed dose") {
-                    Text("Creates a dose 31 minutes in the past so the missed-dose rule runs now.", style = MaterialTheme.typography.bodySmall)
-                    medications.forEach { med ->
-                        OutlinedButton(onClick = {
-                            scope.launch {
-                                val at = System.currentTimeMillis() - MonitoringRepository.DEFAULT_MISSED_WINDOW_MS - 60_000L
-                                val doseId = app.medicationRepository.scheduleDose(userId, med.medicationId, at)
-                                val alert = doseId?.let { app.monitoringRepository.checkMissedDose(userId, it) }
-                                if (alert != null) toast(AlertHandoff.send(context, alert)) else toast("Could not create the dose")
-                            }
-                        }) { Text("Miss a dose of ${med.name}") }
-                    }
-                }
+                Text("Debug demonstration only", style = MaterialTheme.typography.titleMedium)
+                Text("Creates an irreversible fictional missed-dose record in the debug account only.")
+            }
+            items(medications) { med ->
+                OutlinedButton(onClick = { simulate = med }) { Text("Simulate missed dose: ${med.name}") }
             }
         }
-        item { Text("") }
+        item { Spacer(Modifier.padding(bottom = 16.dp)) }
+    }
+
+    }
+
+    simulate?.let { med ->
+        AlertDialog(onDismissRequest = { simulate = null }, title = { Text("Create fictional missed dose?") },
+            text = { Text("Debug account only. This creates a permanent dose/alert record. No contacts are messaged by this demonstration action.") },
+            confirmButton = { TextButton(onClick = {
+                simulate = null
+                scope.launch {
+                    try {
+                        val at = System.currentTimeMillis() - MonitoringRepository.DEFAULT_MISSED_WINDOW_MS - 60_000
+                        val id = app.medicationRepository.scheduleDose(userId, med.medicationId, at)
+                        id?.let { app.monitoringRepository.checkMissedDose(userId, it) }
+                    } catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { error = "Unable to create debug alert." }
+                }
+            }) { Text("Create debug alert") } },
+            dismissButton = { TextButton(onClick = { simulate = null }) { Text("Cancel") } })
+    }
+
+    needsContact?.let { id ->
+        NoDesignatedPersonDialog(onDismiss = { needsContact = null }, onAdd = {
+            needsContact = null
+            onAlertCommunication(id)
+        })
     }
 
     viewing?.let { alert ->
+        val content = presentAlert(alert, readingsById[alert.vitalId], preferences)
         AlertDialog(
             onDismissRequest = { viewing = null },
-            title = { Text(AlertHandoff.title(alert.type)) },
+            title = { AlertHeading(content.title) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(DoseTimes.formatTime(alert.createdAt), style = MaterialTheme.typography.bodySmall)
-                    Text(alert.message)
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    content.recorded?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                    Text(content.guidance)
+                    TextButton(onClick = { viewing = null; notifyPerson(alert.alertId) }) { Text("Notify designated person") }
                     if (viewingLog.isEmpty()) {
-                        Text("No designees were contacted.", style = MaterialTheme.typography.bodySmall)
+                        Text("No contact attempts are logged for this alert.", style = MaterialTheme.typography.bodySmall)
                     }
                     viewingLog.forEach { log ->
-                        val name = designees.firstOrNull { it.designeeId == log.designeeId }?.name ?: "Designee"
+                        val name = designees.firstOrNull { it.designeeId == log.designeeId }?.name ?: "Trusted contact"
                         Text("${log.method} to $name: ${log.status}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -192,12 +211,12 @@ fun MonitoringScreen(onBack: () -> Unit, onOpenCommunication: () -> Unit = {}) {
             confirmButton = {
                 if (alert.acknowledgedAt == null) {
                     TextButton(onClick = {
-                        scope.launch { app.monitoringRepository.acknowledgeAlert(userId, alert.alertId) }
+                        acknowledge(alert)
                         viewing = null
                     }) { Text("Acknowledge") }
                 }
             },
-            dismissButton = { TextButton(onClick = { viewing = null }) { Text("Exit") } }
+            dismissButton = { TextButton(onClick = { viewing = null }) { Text("Close") } }
         )
     }
 }

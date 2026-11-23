@@ -21,6 +21,48 @@ import java.util.Calendar
 class SearchRepositoryTest : DbTest() {
 
     @Test
+    fun intakeHistoryUsesDoseDateAndPreservesAccountIsolation() = runBlocking<Unit> {
+        val medicineA = addMedication(A, "Fictional search medicine")
+        val medicineB = addMedication(B, "Fictional search medicine")
+        val doseA = requireNotNull(medications.scheduleDose(A, medicineA, NOON))
+        val doseB = requireNotNull(medications.scheduleDose(B, medicineB, NOON))
+        assertTrue(medications.markDoseTaken(A, doseA))
+        assertTrue(medications.markDoseMissed(B, doseB))
+        val own = search.search(A, SearchCategory.MEDICATIONS, "taken", NOON, NOON)
+        assertEquals(listOf(doseA), own.map { it.itemId })
+        assertEquals("DOSE_LOG", own.single().kind)
+        assertTrue(own.single().subtitle!!.contains("TAKEN"))
+        assertTrue(search.search(A, SearchCategory.MEDICATIONS, "missed").isEmpty())
+        assertTrue(search.search(B, SearchCategory.MEDICATIONS, "taken").isEmpty())
+        assertTrue(search.search(A, SearchCategory.MEDICATIONS, "taken", to = NOON - 1).isEmpty())
+        assertNull(medications.getDose(B, doseA))
+    }
+
+    @Test
+    fun recentSearchesArePrivatePersistentDeduplicatedAndBounded() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val a = com.cse3310.projecthealthmonitoringsystem.search.SearchHistory(context, A)
+        val b = com.cse3310.projecthealthmonitoringsystem.search.SearchHistory(context, B)
+        a.clear(); b.clear()
+        context.getSharedPreferences("phms_search", 0).edit().putString("history", "[\"legacy secret\"]").commit()
+        assertTrue(a.recent().isEmpty())
+        a.add("Private A"); b.add("Private B")
+        assertEquals(listOf("Private A"), a.recent())
+        assertEquals(listOf("Private B"), b.recent())
+        a.add("private a")
+        assertEquals(1, a.recent().size)
+        repeat(12) { a.add("Query $it") }
+        assertEquals(10, a.recent().size)
+        val reopened = com.cse3310.projecthealthmonitoringsystem.search.SearchHistory(context, A)
+        assertEquals(a.recent(), reopened.recent())
+        a.clear()
+        assertTrue(reopened.recent().isEmpty())
+        assertEquals(listOf("Private B"), b.recent())
+        b.clear()
+    }
+
+
+    @Test
     fun medicationsByKeywordAndDateRange() = runBlocking<Unit> {
         addMedication(A, "Metformin")
         addMedication(A, "Aspirin")

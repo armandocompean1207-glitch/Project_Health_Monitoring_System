@@ -49,7 +49,7 @@ class UserScopingTest : DbTest() {
         foodId = diet.getFoods(A, entryId).single().foodId
         weightId = diet.addWeight(A, Weight(userId = A, value = 70.0, unit = WeightUnit.KG, recordedAt = NOON))
         noteId = notes.createNote(A, "alpha secret", "alpha body")
-        designeeId = communication.addDesignee(A, Designee(userId = A, name = "Alpha Mom", preferredMethod = ContactMethod.SMS))
+        designeeId = communication.addDesignee(A, Designee(userId = A, name = "Alpha Mom", phone = "2025550142", preferredMethod = ContactMethod.SMS))
         commId = communication.logCommunication(A, alertId, designeeId, ContactMethod.SMS, DeliveryStatus.SENT)!!
         val profile = auth.getProfile(A)!!
         auth.updateProfile(A, profile.copy(annualCheckupAt = NOON + 30 * DAY))

@@ -25,6 +25,7 @@ class DietRepository(
     /** Saves a meal and its foods together. Returns the new dietEntryId. */
     suspend fun addDietEntry(userId: String, entry: DietEntry, foods: List<Food> = emptyList()): Long = tx.run {
         require(entry.userId == userId) { "Diet entry must belong to the logged-in user" }
+        validateMeal(entry)
         foods.forEach(::validate)
         val id = dietDao.insertDietEntry(entry)
         if (foods.isNotEmpty()) {
@@ -33,7 +34,15 @@ class DietRepository(
         id
     }
 
-    suspend fun editDietEntry(userId: String, entry: DietEntry): Boolean = dietDao.updateDietEntry(userId, entry)
+    suspend fun editDietEntry(userId: String, entry: DietEntry): Boolean {
+        validateMeal(entry)
+        return dietDao.updateDietEntry(userId, entry)
+    }
+    private fun validateMeal(entry: DietEntry) {
+        com.cse3310.projecthealthmonitoringsystem.validation.HealthValidation.name(entry.mealType, "Meal")
+            ?.let { throw IllegalArgumentException(it) }
+        require(entry.eatenAt in 1..4102444799999L) { "Choose a valid meal date." }
+    }
 
     suspend fun deleteDietEntry(userId: String, dietEntryId: Long): Boolean = dietDao.deleteDietEntry(userId, dietEntryId) > 0
 
@@ -74,12 +83,14 @@ class DietRepository(
 
     suspend fun addWeight(userId: String, weight: Weight): Long {
         require(weight.userId == userId) { "Weight must belong to the logged-in user" }
-        require(weight.value > 0 && weight.value.isFinite()) { "Weight must be a positive number" }
+        require(weight.recordedAt in 1..4102444799999L) { "Choose a valid weight date." }
+        com.cse3310.projecthealthmonitoringsystem.validation.HealthValidation.weightKg(convert(weight.value, weight.unit, WeightUnit.KG))?.let { throw IllegalArgumentException(it) }
         return dietDao.insertWeight(weight)
     }
 
     suspend fun editWeight(userId: String, weight: Weight): Boolean {
-        require(weight.value > 0 && weight.value.isFinite()) { "Weight must be a positive number" }
+        require(weight.recordedAt in 1..4102444799999L) { "Choose a valid weight date." }
+        com.cse3310.projecthealthmonitoringsystem.validation.HealthValidation.weightKg(convert(weight.value, weight.unit, WeightUnit.KG))?.let { throw IllegalArgumentException(it) }
         return dietDao.updateWeight(userId, weight)
     }
 
@@ -111,9 +122,9 @@ class DietRepository(
     }
 
     private fun validate(food: Food) {
-        require(food.name.isNotBlank()) { "Food name is required" }
-        require(food.calories >= 0) { "Calories cannot be negative" }
-        require(food.proteinGrams >= 0 && food.sugarGrams >= 0) { "Grams cannot be negative" }
+        val v = com.cse3310.projecthealthmonitoringsystem.validation.HealthValidation
+        (v.name(food.name, "Food name") ?: v.calories(food.calories) ?: v.grams(food.proteinGrams) ?: v.grams(food.sugarGrams))
+            ?.let { throw IllegalArgumentException(it) }
     }
 
     companion object {

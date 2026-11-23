@@ -30,7 +30,8 @@ class SearchRepository(
         require(from == null || to == null || from <= to) { "Start date must not be after end date" }
         val pattern = likePattern(keyword)
         return when (category) {
-            SearchCategory.MEDICATIONS -> searchDao.searchMedications(userId, pattern, from, to)
+            SearchCategory.MEDICATIONS -> (searchDao.searchMedications(userId, pattern, from, to) +
+                searchDao.searchIntakeHistory(userId, pattern, from, to)).sortedByDescending { it.timestamp }
             SearchCategory.DOCTORS_AND_VISITS -> searchDao.searchDoctorsAndVisits(userId, pattern, from, to)
             SearchCategory.VITAL_SIGNS -> searchDao.searchVitalSigns(userId, pattern, from, to)
             SearchCategory.DIET_AND_WEIGHT -> searchDao.searchDietAndWeight(userId, pattern, from, to)

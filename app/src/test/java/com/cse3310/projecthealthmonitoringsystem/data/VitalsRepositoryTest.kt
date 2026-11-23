@@ -33,7 +33,8 @@ class VitalsRepositoryTest : DbTest() {
         val alert = monitoring.getAlert(A, result.alertId!!)!!
         assertEquals(AlertType.ABNORMAL_VITAL, alert.type)
         assertEquals(result.vitalId, alert.vitalId)
-        assertEquals("Abnormal Blood Glucose: 250 mg/dL", alert.message)
+        assertTrue(alert.message.startsWith("Abnormal Blood Glucose: 250 mg/dL\nRecorded "))
+        assertTrue(alert.message.contains(com.cse3310.projecthealthmonitoringsystem.validation.VitalAssessment.date(NOON)))
     }
 
     @Test

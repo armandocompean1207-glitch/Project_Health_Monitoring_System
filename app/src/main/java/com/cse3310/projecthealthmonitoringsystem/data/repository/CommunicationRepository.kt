@@ -27,10 +27,29 @@ class CommunicationRepository(
 
     suspend fun addDesignee(userId: String, designee: Designee): Long {
         require(designee.userId == userId) { "Designee must belong to the logged-in user" }
+        validateContact(designee)
         return designeeDao.insertDesignee(designee)
     }
 
-    suspend fun editDesignee(userId: String, designee: Designee): Boolean = designeeDao.updateDesignee(userId, designee)
+    suspend fun editDesignee(userId: String, designee: Designee): Boolean {
+        validateContact(designee)
+        return designeeDao.updateDesignee(userId, designee)
+    }
+    private fun validateContact(contact: Designee) {
+        val v = com.cse3310.projecthealthmonitoringsystem.validation.HealthValidation
+        (v.name(contact.name, "Contact name") ?: v.phone(contact.phone) ?: v.email(contact.email))
+            ?.let { throw IllegalArgumentException(it) }
+        require(contact.contactMethodsMask == null || contact.contactMethodsMask in 1..7) { "Select at least one contact method." }
+        val methods = contact.selectedMethods()
+        require(methods.isNotEmpty()) { "Select at least one contact method." }
+        require(ContactMethod.EMAIL !in methods || contact.email.isNotBlank()) { "Enter an email address for this contact." }
+        require(methods.none { it == ContactMethod.SMS || it == ContactMethod.CALL } || contact.phone.isNotBlank()) {
+            "Enter a phone number for texts and calls."
+        }
+        require(contact.automaticSmsConsent != true || ContactMethod.SMS in methods) {
+            "Select Text before allowing automatic SMS alerts."
+        }
+    }
 
     suspend fun deleteDesignee(userId: String, designeeId: Long): Boolean = designeeDao.deleteDesignee(userId, designeeId) > 0
 

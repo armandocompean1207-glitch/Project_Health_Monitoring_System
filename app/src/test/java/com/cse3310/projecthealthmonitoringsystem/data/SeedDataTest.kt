@@ -56,11 +56,20 @@ class SeedDataTest : DbTest() {
         }
         assertEquals(
             listOf(
+                "dosecorrection_freeze_original",
+                "dosecorrection_no_delete",
+                "dosecorrection_no_update",
+                "dosecorrection_validate",
                 "doselog_no_delete",
                 "doselog_update_once",
                 "medication_audit_dosage",
+                "medication_audit_dose_times",
                 "medication_audit_intake_time",
-                "medication_audit_name"
+                "medication_audit_name",
+                "medication_pharmacy_owner_insert",
+                "medication_pharmacy_owner_update",
+                "pharmacy_preferred_insert",
+                "pharmacy_preferred_update"
             ),
             names
         )

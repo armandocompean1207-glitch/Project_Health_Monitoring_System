@@ -1,39 +1,21 @@
 package com.cse3310.projecthealthmonitoringsystem.search
 
 import android.content.Context
-import android.content.SharedPreferences
-import androidx.compose.runtime.mutableStateListOf
 import org.json.JSONArray
 
-object SearchHistory {
-
-    private const val PREFS = "phms_search"
-    private const val KEY = "history"
-    private const val MAX = 10
-
-    private var prefs: SharedPreferences? = null
-    val recent = mutableStateListOf<String>()
-
-    fun init(context: Context) {
-        if (prefs != null) return
-        val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        prefs = p
-        val array = JSONArray(p.getString(KEY, "[]"))
-        recent.clear()
-        (0 until array.length()).forEach { recent.add(array.getString(it)) }
-    }
-
+/** Account-specific local search history. Legacy shared history is deliberately not imported. */
+class SearchHistory(context: Context, userId: String) {
+    private val prefs = context.applicationContext.getSharedPreferences("phms_search", Context.MODE_PRIVATE)
+    private val key = "history_user_" + userId
+    fun recent(): List<String> = runCatching {
+        val array = JSONArray(prefs.getString(key, "[]"))
+        (0 until array.length()).map { array.getString(it) }.take(10)
+    }.getOrDefault(emptyList())
     fun add(query: String) {
-        val q = query.trim()
-        if (q.isEmpty()) return
-        recent.removeAll { it.equals(q, ignoreCase = true) }
-        recent.add(0, q)
-        while (recent.size > MAX) recent.removeAt(recent.size - 1)
-        prefs?.edit()?.putString(KEY, JSONArray(recent.toList()).toString())?.apply()
+        val value = query.trim().take(200)
+        if (value.isBlank()) return
+        val values = (listOf(value) + recent().filterNot { it.equals(value, true) }).take(10)
+        prefs.edit().putString(key, JSONArray(values).toString()).apply()
     }
-
-    fun clear() {
-        recent.clear()
-        prefs?.edit()?.remove(KEY)?.apply()
-    }
+    fun clear() { prefs.edit().remove(key).apply() }
 }

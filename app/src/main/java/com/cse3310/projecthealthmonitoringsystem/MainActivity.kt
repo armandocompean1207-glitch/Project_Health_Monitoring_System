@@ -6,58 +6,90 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Medication
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.MonitorHeart
-import androidx.compose.material.icons.filled.Note
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.MonitorHeart
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import pushtest.navigation.AppNavGraph
-import pushtest.navigation.AppRoutes
-import pushtest.navigation.TopLevelDestination
+import com.cse3310.projecthealthmonitoringsystem.navigation.AppNavGraph
+import com.cse3310.projecthealthmonitoringsystem.navigation.AppRoutes
+import com.cse3310.projecthealthmonitoringsystem.navigation.TopLevelDestination
+import com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsIcons
 import com.cse3310.projecthealthmonitoringsystem.ui.theme.ProjectHealthMonitoringSystemTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentNavigation.accept(intent)
+        if (android.os.Build.VERSION.SDK_INT >= 31) splashScreen.setOnExitAnimationListener { splash ->
+            splash.iconView?.animate()?.scaleX(1.03f)?.scaleY(1.03f)?.setDuration(140L)?.start()
+            splash.animate().alpha(0f).setDuration(140L).withEndAction { splash.remove() }.start()
+        }
         enableEdgeToEdge()
 
         setContent {
             ProjectHealthMonitoringSystemTheme {
-                PhmsApp()
+                com.cse3310.projecthealthmonitoringsystem.auth.AccountGate()
             }
         }
+    }
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentNavigation.accept(intent)
     }
 }
 
 @Composable
 fun PhmsApp() {
+    if (com.cse3310.projecthealthmonitoringsystem.monitoring.CurrentUser.userId.isBlank()) return
     val navController = rememberNavController()
+    val navigationGuard = androidx.compose.runtime.remember { com.cse3310.projecthealthmonitoringsystem.ui.components.NavigationGuard() }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val appointmentRequest = com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentNavigation.request
+    val signedInUser = com.cse3310.projecthealthmonitoringsystem.monitoring.CurrentUser.userId
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(appointmentRequest, signedInUser) {
+        appointmentRequest?.let { request ->
+            if (request.owner == signedInUser) {
+                navController.navigate("appointment/${request.id}") { launchSingleTop = true }
+                com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentNavigation.consumed(request)
+                (context as? android.app.Activity)?.intent?.apply {
+                    removeExtra(com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentReminders.ID)
+                    removeExtra(com.cse3310.projecthealthmonitoringsystem.maintenance.AppointmentReminders.OWNER)
+                }
+            } else android.widget.Toast.makeText(context, "Sign in to the account for this appointment.", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
 
     val destinations = listOf(
-        TopLevelDestination("Home", AppRoutes.HOME, Icons.Filled.Home),
-        TopLevelDestination("Medication", AppRoutes.MEDICATION, Icons.Filled.Medication),
-        TopLevelDestination("Health", AppRoutes.HEALTH, Icons.Filled.MonitorHeart),
-        TopLevelDestination("Notes", AppRoutes.NOTES, Icons.Filled.Note),
-        TopLevelDestination("More", AppRoutes.MORE, Icons.Filled.MoreHoriz)
+        TopLevelDestination("Home", AppRoutes.HOME, PhmsIcons.Home),
+        TopLevelDestination("Meds", AppRoutes.MEDICATION, PhmsIcons.Medication),
+        TopLevelDestination("Vitals", AppRoutes.HEALTH, PhmsIcons.Vitals),
+        TopLevelDestination("More", AppRoutes.MORE, PhmsIcons.More)
     )
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -74,31 +106,44 @@ fun PhmsApp() {
                     NavigationBarItem(
                         selected = selected,
                         onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.startDestinationId)
-                                launchSingleTop = true
+                            navigationGuard.request {
+                                navController.navigate(destination.route) {
+                                    popUpTo(navController.graph.startDestinationId)
+                                    launchSingleTop = true
+                                }
                             }
                         },
                         icon = {
                             Icon(
-                                imageVector = destination.icon,
-                                contentDescription = destination.label
+                                imageVector = if (selected) destination.icon else when (destination.route) {
+                                    AppRoutes.HOME -> Icons.Outlined.Home
+                                    AppRoutes.MEDICATION -> Icons.Outlined.Medication
+                                    AppRoutes.HEALTH -> Icons.Outlined.MonitorHeart
+                                    else -> Icons.Outlined.MoreHoriz
+                                },
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp)
                             )
                         },
-                        label = null,
+                        label = { Text(destination.label, style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)) },
+                        alwaysShowLabel = true,
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            unselectedIconColor = MaterialTheme.colorScheme.secondary,
-                            indicatorColor = MaterialTheme.colorScheme.secondaryContainer
+                            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer
                         )
                     )
                 }
             }
         }
-    ) { innerPadding ->
-        AppNavGraph(
-            navController = navController,
-            modifier = Modifier.padding(innerPadding)
-        )
+    )
+    { innerPadding ->
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.cse3310.projecthealthmonitoringsystem.ui.components.LocalNavigationGuard provides navigationGuard) {
+            AppNavGraph(navController = navController, modifier = Modifier.padding(innerPadding))
+        }
     }
 }

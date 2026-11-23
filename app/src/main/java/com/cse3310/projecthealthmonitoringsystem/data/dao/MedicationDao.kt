@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 abstract class MedicationDao {
 
+    @Query("SELECT EXISTS(SELECT 1 FROM Pharmacy WHERE pharmacyId = :pharmacyId AND userId = :userId)")
+    abstract suspend fun pharmacyOwned(userId: String, pharmacyId: Long): Boolean
+
     // ---- Medication ----
 
     @Insert
@@ -74,15 +77,15 @@ abstract class MedicationDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insertDoseIfAbsent(dose: DoseLog): Long
 
-    @Query("SELECT * FROM DoseLog WHERE doseId = :doseId AND userId = :userId")
+    @Query("SELECT * FROM EffectiveDoseLog WHERE doseId = :doseId AND userId = :userId")
     abstract suspend fun getDose(userId: String, doseId: Long): DoseLog?
 
-    @Query("SELECT * FROM DoseLog WHERE userId = :userId AND medicationId = :medicationId AND scheduledAt = :scheduledAt")
+    @Query("SELECT * FROM EffectiveDoseLog WHERE userId = :userId AND medicationId = :medicationId AND scheduledAt = :scheduledAt")
     abstract suspend fun getDoseAt(userId: String, medicationId: Long, scheduledAt: Long): DoseLog?
 
     @Query(
         """
-        SELECT * FROM DoseLog
+        SELECT * FROM EffectiveDoseLog
         WHERE userId = :userId AND medicationId = :medicationId AND scheduledAt BETWEEN :from AND :to
         ORDER BY scheduledAt
         """
@@ -92,7 +95,7 @@ abstract class MedicationDao {
     @Query(
         """
         SELECT dl.*, m.name AS medicationName, m.dosage AS dosage
-        FROM DoseLog dl JOIN Medication m ON m.medicationId = dl.medicationId AND m.userId = dl.userId
+        FROM EffectiveDoseLog dl JOIN Medication m ON m.medicationId = dl.medicationId AND m.userId = dl.userId
         WHERE dl.userId = :userId AND dl.scheduledAt BETWEEN :from AND :to
         ORDER BY dl.scheduledAt
         """
@@ -115,7 +118,7 @@ abstract class MedicationDao {
     @Query(
         """
         SELECT dl.*, m.name AS medicationName, m.dosage AS dosage
-        FROM DoseLog dl JOIN Medication m ON m.medicationId = dl.medicationId AND m.userId = dl.userId
+        FROM EffectiveDoseLog dl JOIN Medication m ON m.medicationId = dl.medicationId AND m.userId = dl.userId
         WHERE dl.userId = :userId AND dl.status = 'SCHEDULED' AND dl.scheduledAt <= :now - :windowMs
         ORDER BY dl.scheduledAt
         """
@@ -130,6 +133,24 @@ abstract class MedicationDao {
         """
     )
     abstract suspend fun markDosesMissed(userId: String, doseIds: List<Long>, recordedAt: Long): Int
+
+    @Query("SELECT * FROM DoseLog WHERE userId = :userId AND doseId = :doseId")
+    abstract suspend fun originalDose(userId: String, doseId: Long): DoseLog?
+
+    @Insert
+    abstract suspend fun insertCorrection(correction: com.cse3310.projecthealthmonitoringsystem.data.entity.DoseCorrection): Long
+
+    @Query("SELECT * FROM DoseCorrection WHERE userId = :userId AND doseId = :doseId ORDER BY correctionId DESC LIMIT 1")
+    abstract suspend fun latestCorrection(userId: String, doseId: Long): com.cse3310.projecthealthmonitoringsystem.data.entity.DoseCorrection?
+
+    @Query("""
+        SELECT c.* FROM DoseCorrection c JOIN DoseLog d ON c.doseId=d.doseId AND c.userId=d.userId
+        WHERE c.userId=:userId AND d.scheduledAt BETWEEN :from AND :to ORDER BY c.correctionId
+    """)
+    abstract fun observeCorrections(userId: String, from: Long, to: Long): Flow<List<com.cse3310.projecthealthmonitoringsystem.data.entity.DoseCorrection>>
+
+    @Query("SELECT * FROM DoseCorrection WHERE userId=:userId AND doseId=:doseId ORDER BY correctionId")
+    abstract suspend fun correctionHistory(userId: String, doseId: Long): List<com.cse3310.projecthealthmonitoringsystem.data.entity.DoseCorrection>
 
     // ---- AuditLog (rows are written by triggers) ----
 

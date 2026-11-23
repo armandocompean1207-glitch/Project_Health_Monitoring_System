@@ -21,5 +21,7 @@ data class Profile(
     val weightUnit: WeightUnit = WeightUnit.KG,
     val heightCm: Double,
     /** Next annual checkup, epoch ms. */
-    val annualCheckupAt: Long? = null
+    val annualCheckupAt: Long? = null,
+    /** ISO local date, nullable for profiles created before version 2. */
+    val dateOfBirth: String? = null
 )

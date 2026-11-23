@@ -58,6 +58,11 @@ object DatabaseTriggers {
         statements.forEach { db.execSQL(it.trimIndent()) }
     }
 
+    /** Additional schedule audit for version 3; all existing dose protections remain unchanged. */
+    fun createMedicationTimesAudit(db: SupportSQLiteDatabase) {
+        db.execSQL(auditTrigger("medication_audit_dose_times", "doseTimesMinutes", "doseTimesMinutes").trimIndent())
+    }
+
     /** Called from RoomDatabase.Callback.onOpen on every connection open. */
     fun enableOnOpen(db: SupportSQLiteDatabase) {
         db.execSQL("PRAGMA recursive_triggers = ON")

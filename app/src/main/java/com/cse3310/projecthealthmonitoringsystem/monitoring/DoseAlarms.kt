@@ -22,30 +22,32 @@ object DoseAlarms {
     const val EXTRA_MEDICATION_ID = "medication_id"
     const val EXTRA_SCHEDULED_AT = "scheduled_at"
     const val EXTRA_DOSE_ID = "dose_id"
+    const val EXTRA_USER_ID = "user_id"
 
     fun nextReminderTime(med: Medication, now: Long = System.currentTimeMillis()): Long =
-        DoseTimes.nextDoseTime(
-            med.intakeTimeMinutes / 60,
-            med.intakeTimeMinutes % 60,
-            Frequency.timesPerDay(med.frequency),
-            now
-        )
+        com.cse3310.projecthealthmonitoringsystem.medication.nextScheduledIntake(med, now) ?: Long.MAX_VALUE
 
     fun scheduleNextReminder(context: Context, med: Medication, now: Long = System.currentTimeMillis()) {
-        val at = nextReminderTime(med, now)
-        set(context, at, reminderIntent(context, med.medicationId, at))
+        if (!med.isActive || com.cse3310.projecthealthmonitoringsystem.auth.AccountSession.reminderUser(context) != med.userId) return
+        val at = com.cse3310.projecthealthmonitoringsystem.medication.nextScheduledIntake(med, now)
+        if (at == null) { cancelReminder(context, med.medicationId); return }
+        set(context, at, reminderIntent(context, med.medicationId, at, med.userId))
     }
 
     fun cancelReminder(context: Context, medicationId: Long) {
         context.getSystemService(AlarmManager::class.java)?.cancel(reminderIntent(context, medicationId, 0))
     }
 
-    fun scheduleMissedCheck(context: Context, doseId: Long, at: Long) {
-        set(context, maxOf(at, System.currentTimeMillis() + 5_000L), missedCheckIntent(context, doseId))
+    fun scheduleMissedCheck(context: Context, doseId: Long, at: Long, userId: String = CurrentUser.userId) {
+        set(context, maxOf(at, System.currentTimeMillis() + 5_000L), missedCheckIntent(context, doseId, userId))
     }
 
     fun cancelMissedCheck(context: Context, doseId: Long) {
         context.getSystemService(AlarmManager::class.java)?.cancel(missedCheckIntent(context, doseId))
+    }
+
+    fun cancelDoseNotification(context: Context, doseId: Long) {
+        context.getSystemService(android.app.NotificationManager::class.java)?.cancel((doseId * 2 % Int.MAX_VALUE).toInt())
     }
 
     private fun set(context: Context, atMillis: Long, intent: PendingIntent) {
@@ -58,11 +60,12 @@ object DoseAlarms {
         }
     }
 
-    private fun reminderIntent(context: Context, medicationId: Long, at: Long): PendingIntent {
+    private fun reminderIntent(context: Context, medicationId: Long, at: Long, userId: String = CurrentUser.userId): PendingIntent {
         val intent = Intent(context, DoseAlarmReceiver::class.java)
             .setAction(ACTION_REMINDER)
             .putExtra(EXTRA_MEDICATION_ID, medicationId)
             .putExtra(EXTRA_SCHEDULED_AT, at)
+            .putExtra(EXTRA_USER_ID, userId)
         return PendingIntent.getBroadcast(
             context,
             (medicationId * 2 % Int.MAX_VALUE).toInt(),
@@ -71,10 +74,11 @@ object DoseAlarms {
         )
     }
 
-    private fun missedCheckIntent(context: Context, doseId: Long): PendingIntent {
+    private fun missedCheckIntent(context: Context, doseId: Long, userId: String = CurrentUser.userId): PendingIntent {
         val intent = Intent(context, DoseAlarmReceiver::class.java)
             .setAction(ACTION_MISSED_CHECK)
             .putExtra(EXTRA_DOSE_ID, doseId)
+            .putExtra(EXTRA_USER_ID, userId)
         return PendingIntent.getBroadcast(
             context,
             ((doseId * 2 + 1) % Int.MAX_VALUE).toInt(),
@@ -86,9 +90,10 @@ object DoseAlarms {
 
 class DoseAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val userId = com.cse3310.projecthealthmonitoringsystem.auth.AccountSession.reminderUser(context) ?: return
+        if (intent.getStringExtra(DoseAlarms.EXTRA_USER_ID)?.let { it != userId } == true) return
         val pending = goAsync()
         val app = context.phms()
-        val userId = CurrentUser.userId
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 when (intent.action) {
@@ -96,20 +101,29 @@ class DoseAlarmReceiver : BroadcastReceiver() {
                         val medicationId = intent.getLongExtra(DoseAlarms.EXTRA_MEDICATION_ID, -1L)
                         val at = intent.getLongExtra(DoseAlarms.EXTRA_SCHEDULED_AT, System.currentTimeMillis())
                         val med = app.medicationRepository.getMedication(userId, medicationId)
-                        if (med != null && med.isActive) {
+                        if (med != null && com.cse3310.projecthealthmonitoringsystem.medication.isScheduledIntake(med, at) &&
+                            (med.endDate == null || System.currentTimeMillis() <= med.endDate)) {
                             val doseId = app.medicationRepository.scheduleDose(userId, medicationId, at)
-                            if (doseId != null) {
-                                AlertSender.notifyUser(
-                                    context,
-                                    (doseId * 2 % Int.MAX_VALUE).toInt(),
-                                    "Time to take ${med.name}",
-                                    "${med.dosage}. Open PHMS and mark it as taken."
-                                )
-                                DoseAlarms.scheduleMissedCheck(
-                                    context, doseId, at + MonitoringRepository.DEFAULT_MISSED_WINDOW_MS
-                                )
+                            if (doseId != null &&
+                                app.medicationRepository.getDose(userId, doseId)?.status == com.cse3310.projecthealthmonitoringsystem.data.entity.DoseStatus.SCHEDULED) {
+                                com.cse3310.projecthealthmonitoringsystem.auth.AccountSession.whileActive(context, userId) {
+                                    AlertSender.notifyUser(context, (doseId * 2 % Int.MAX_VALUE).toInt(),
+                                        "Time to take ${med.name}", "${med.dosage}. Open PHMS and mark it as taken.")
+                                }
+                                DoseAlarms.scheduleMissedCheck(context, doseId,
+                                    at + MonitoringRepository.DEFAULT_MISSED_WINDOW_MS, userId)
+                                // A confirmation can race this broadcast. Never leave a stale reminder
+                                // or missed check for an occurrence that became final while posting.
+                                if (app.medicationRepository.getDose(userId, doseId)?.status !=
+                                    com.cse3310.projecthealthmonitoringsystem.data.entity.DoseStatus.SCHEDULED) {
+                                    DoseAlarms.cancelDoseNotification(context, doseId)
+                                    DoseAlarms.cancelMissedCheck(context, doseId)
+                                }
                             }
-                            DoseAlarms.scheduleNextReminder(context, med, at + 1_000L)
+                            DoseAlarms.scheduleNextReminder(context, med, maxOf(at + 1_000L, System.currentTimeMillis()))
+                        } else if (med != null) {
+                            // Ignore an old broadcast after editing dates/times, then restore the current schedule.
+                            DoseAlarms.scheduleNextReminder(context, med)
                         }
                     }
                     DoseAlarms.ACTION_MISSED_CHECK -> {
@@ -130,13 +144,16 @@ class DoseRebootReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
             intent.action != Intent.ACTION_MY_PACKAGE_REPLACED
         ) return
+        val userId = com.cse3310.projecthealthmonitoringsystem.auth.AccountSession.reminderUser(context) ?: return
         val pending = goAsync()
         val app = context.phms()
-        val userId = CurrentUser.userId
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 app.medicationRepository.getActiveMedications(userId)
                     .forEach { DoseAlarms.scheduleNextReminder(context, it) }
+                try { com.cse3310.projecthealthmonitoringsystem.healthguide.VaccinationReminders.restore(context, userId) }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (failure: Exception) { android.util.Log.w("PHMS", "Optional vaccination reminders could not be restored", failure) }
                 app.monitoringRepository.checkMissedDoses(userId)
                     .forEach { AlertHandoff.send(context, it) }
             } finally {

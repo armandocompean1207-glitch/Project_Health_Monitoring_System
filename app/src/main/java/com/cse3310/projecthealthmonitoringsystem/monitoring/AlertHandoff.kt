@@ -15,31 +15,39 @@ object AlertHandoff {
         AlertType.ABNORMAL_VITAL -> "Abnormal vital sign"
     }
 
+    fun usesAutomaticSms(contact: com.cse3310.projecthealthmonitoringsystem.data.entity.Designee): Boolean =
+        contact.allowsAutomaticSms()
+
     suspend fun send(context: Context, alert: Alert): String {
         val app = context.phms()
         val userId = alert.userId
-        AlertSender.notifyUser(context, (100_000 + alert.alertId).toInt(), title(alert.type), alert.message)
+        if (!com.cse3310.projecthealthmonitoringsystem.auth.AccountSession.whileActive(context, userId) {
+            AlertSender.notifyUser(context, (100_000 + alert.alertId).toInt(), title(alert.type), updatedEmergencyGuidance(alert.message))
+        }) return "Account is signed out"
 
-        val designees = app.communicationRepository.getDesignees(userId)
-        if (designees.isEmpty()) return "No designees set up"
+        val designees = app.communicationRepository.getDesignees(userId).filter(::usesAutomaticSms)
+        if (designees.isEmpty()) return "No automatic SMS contacts. Open Communication for email or calls."
 
-        val text = "PHMS alert: ${alert.message}"
+        val text = "PHMS alert: ${updatedEmergencyGuidance(alert.message)}"
         val texted = mutableListOf<String>()
         val failed = mutableListOf<String>()
         for (d in designees) {
-            val ok = AlertSender.sendSms(context, d.phone, text)
+            var ok = false
+            if (!com.cse3310.projecthealthmonitoringsystem.auth.AccountSession.whileActive(context, userId) {
+                ok = AlertSender.sendSms(context, d.phone, text)
+            }) return "Account is signed out"
             app.communicationRepository.logCommunication(
                 userId = userId,
                 alertId = alert.alertId,
                 designeeId = d.designeeId,
                 method = ContactMethod.SMS,
                 status = if (ok) DeliveryStatus.SENT else DeliveryStatus.FAILED,
-                detail = if (ok) "" else "No phone number or SMS permission"
+                detail = if (ok) "Submitted to SMS service; delivery is not confirmed" else "No phone number, SMS permission, or SMS service"
             )
             if (ok) texted += d.name else failed += d.name
         }
         return buildString {
-            if (texted.isNotEmpty()) append("Texted ${texted.joinToString()}")
+            if (texted.isNotEmpty()) append("SMS submitted for ${texted.joinToString()}")
             if (failed.isNotEmpty()) {
                 if (isNotEmpty()) append("; ")
                 append("could not text ${failed.joinToString()}")
