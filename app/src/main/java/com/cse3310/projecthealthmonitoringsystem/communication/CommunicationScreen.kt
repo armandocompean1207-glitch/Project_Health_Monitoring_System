@@ -95,9 +95,8 @@ fun CommunicationScreen(onBack: () -> Unit, alertId: Long? = null) {
     val alerts by remember(userId, now) { app.monitoringRepository.observeShareableAlerts(userId, now) }.collectAsState(initial = emptyList())
     val readings by remember(userId) { app.vitalsRepository.observeVitalSigns(userId) }.collectAsState(initial = emptyList())
     val types by remember { app.vitalsRepository.observeVitalTypes() }.collectAsState(initial = emptyList())
-    val preferences = rememberMeasurementPreferences()
     val readingsById = readings.associateBy { it.vital.vitalId }
-    val yellow = Color(0xFFFFDF48)
+    val yellow = Color(0xFF065F46)
     val neutralBorder = Color(0xFFE8E1D8)
 
     var smsAllowed by remember { mutableStateOf(AlertSender.canSendSms(context)) }
@@ -120,11 +119,12 @@ fun CommunicationScreen(onBack: () -> Unit, alertId: Long? = null) {
     var choosingAlert by remember { mutableStateOf(false) }
     var updateChosen by remember(alertId) { mutableStateOf(alertId != null) }
     var choosingRecipient by remember { mutableStateOf(false) }
+    var selectedContactId by remember(userId) { mutableStateOf<Long?>(null) }
+    var selectedChannel by remember(userId) { mutableStateOf<ContactMethod?>(null) }
     var shareUpdateId by remember(userId) { mutableStateOf(java.util.UUID.randomUUID().toString()) }
     var showingHistory by remember(userId) { mutableStateOf(false) }
     val history = remember(log) { communicationHistory(log) }
-    var pendingContact by remember { mutableStateOf<Triple<Designee, ContactMethod, Long?>?>(null) }
-    var featureUnavailable by remember(userId) { mutableStateOf(false) }
+
     val dismissContactForm = rememberGuardedDismiss(showForm, busy) { showForm = false }
     val selectedAlert = alerts.firstOrNull { it.alertId == selectedAlertId }
     val listState = rememberLazyListState()
@@ -154,9 +154,8 @@ fun CommunicationScreen(onBack: () -> Unit, alertId: Long? = null) {
             else -> null
         }
 
-    fun contact(d: Designee, how: ContactMethod) {
-        pendingContact = Triple(d, how, selectedAlertId)
-    }
+    fun showFeatureUnavailable() { toast("Feature under development.") }
+
 
     LazyColumn(
         state = listState,
@@ -191,7 +190,7 @@ fun CommunicationScreen(onBack: () -> Unit, alertId: Long? = null) {
                         enabled = selectedAlertId == null || selectedAlert != null,
                         modifier = Modifier.fillMaxWidth(),
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                            containerColor = yellow, contentColor = Color.Black)
+                            containerColor = yellow, contentColor = Color.White)
                     ) { Text("Share update") }
                 }
             }
@@ -240,8 +239,8 @@ fun CommunicationScreen(onBack: () -> Unit, alertId: Long? = null) {
                                     },
                                     label = { Text(methodLabel(m)) },
                                     colors = FilterChipDefaults.filterChipColors(containerColor = Color.White,
-                                        labelColor = Color(0xFF111827), selectedContainerColor = yellow,
-                                        selectedLabelColor = Color(0xFF111827)),
+                                        labelColor = Color(0xFF0F172A), selectedContainerColor = yellow,
+                                        selectedLabelColor = Color.White),
                                     border = BorderStroke(1.dp, if (m in methods) yellow else neutralBorder))
                             }
                         }
@@ -293,7 +292,7 @@ fun CommunicationScreen(onBack: () -> Unit, alertId: Long? = null) {
         item { Text("Trusted contacts", style = MaterialTheme.typography.titleLarge) }
         if (designees.isEmpty()) {
             item {
-                MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primaryContainer = yellow, onPrimaryContainer = Color(0xFF111827))) {
+                MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primaryContainer = yellow, onPrimaryContainer = Color.White)) {
                     PhmsEmptyStateCard("No trusted contacts yet", "Add someone you trust, then choose how to reach them.", PhmsIcons.Communication)
                 }
             }
@@ -301,24 +300,27 @@ fun CommunicationScreen(onBack: () -> Unit, alertId: Long? = null) {
         items(designees, key = { "designee-${it.designeeId}" }) { d ->
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primaryContainer = yellow, onPrimaryContainer = Color.Black)) {
-                        PhmsIconBadge(PhmsIcons.Profile)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primaryContainer = yellow, onPrimaryContainer = Color.White)) {
+                            PhmsIconBadge(PhmsIcons.Profile)
+                        }
+                        Text(d.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                     }
-                    Text("${d.name} (${d.relationship.ifBlank { "Trusted contact" }})", style = MaterialTheme.typography.titleMedium)
+                    Text(d.relationship.ifBlank { "Trusted contact" }, style = MaterialTheme.typography.bodyMedium)
                     if (d.phone.isNotBlank()) Text(d.phone)
                     if (d.email.isNotBlank()) Text(d.email)
                     Text("Prefers: ${d.selectedMethods().joinToString { methodLabel(it) }}", style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         if (d.phone.isNotBlank() && ContactMethod.SMS in d.selectedMethods())
-                            TextButton(enabled = selectedAlertId == null || selectedAlert != null, onClick = { contact(d, ContactMethod.SMS) }) { Icon(Icons.Outlined.Sms, null); Text(" Text") }
+                            TextButton(enabled = selectedAlertId == null || selectedAlert != null, onClick = { showFeatureUnavailable() }) { Icon(Icons.Outlined.Sms, null); Text(" Text") }
                         if (d.phone.isNotBlank() && ContactMethod.CALL in d.selectedMethods())
-                            TextButton(enabled = selectedAlertId == null || selectedAlert != null, onClick = { contact(d, ContactMethod.CALL) }) { Icon(Icons.Outlined.Call, null); Text(" Call") }
+                            TextButton(enabled = selectedAlertId == null || selectedAlert != null, onClick = { showFeatureUnavailable() }) { Icon(Icons.Outlined.Call, null); Text(" Call") }
                         if (d.email.isNotBlank() && ContactMethod.EMAIL in d.selectedMethods())
-                            TextButton(enabled = selectedAlertId == null || selectedAlert != null, onClick = { contact(d, ContactMethod.EMAIL) }) { Icon(Icons.Outlined.Email, null); Text(" Email") }
+                            TextButton(enabled = selectedAlertId == null || selectedAlert != null, onClick = { showFeatureUnavailable() }) { Icon(Icons.Outlined.Email, null); Text(" Email") }
                     }
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        TextButton(onClick = { openForm(d) }) { Text("Edit") }
-                        TextButton(onClick = { deleting = d }) { Text("Delete") }
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { openForm(d) }) { Text("Edit") }
+                        OutlinedButton(onClick = { deleting = d }) { Text("Delete") }
                     }
                 }
             }
@@ -367,7 +369,12 @@ fun CommunicationScreen(onBack: () -> Unit, alertId: Long? = null) {
     }
 
     if (choosingRecipient) {
-        AlertDialog(onDismissRequest = { choosingRecipient = false },
+        val recipient = designees.firstOrNull { it.designeeId == selectedContactId }
+        val validChannel = recipient?.let { person ->
+            selectedChannel?.takeIf { it in person.selectedMethods() &&
+                ((it == ContactMethod.SMS && person.phone.isNotBlank()) || (it == ContactMethod.EMAIL && person.email.isNotBlank())) }
+        }
+        AlertDialog(onDismissRequest = { if (!busy) choosingRecipient = false },
             title = { Text("Choose a trusted contact") },
             containerColor = Color.White,
             text = {
@@ -377,19 +384,31 @@ fun CommunicationScreen(onBack: () -> Unit, alertId: Long? = null) {
                         Button(onClick = { choosingRecipient = false; openForm(null) }) { Text("Add contact") }
                     }
                     designees.forEach { person ->
-                        OutlinedCard(Modifier.fillMaxWidth()) {
+                        val selected = selectedContactId == person.designeeId
+                        OutlinedCard(Modifier.fillMaxWidth(),
+                            onClick = {
+                                if (selectedContactId != person.designeeId) selectedChannel = null
+                                selectedContactId = person.designeeId
+                            },
+                            border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) yellow else neutralBorder)) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primaryContainer = yellow, onPrimaryContainer = Color.Black)) {
+                                    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primaryContainer = yellow, onPrimaryContainer = Color.White)) {
                                         PhmsIconBadge(PhmsIcons.Profile)
                                     }
                                     Text(person.name, style = MaterialTheme.typography.titleMedium)
                                 }
                                 Row(Modifier.horizontalScroll(rememberScrollState())) {
-                                    person.selectedMethods().forEach { method ->
-                                        val available = if (method == ContactMethod.EMAIL) person.email.isNotBlank() else person.phone.isNotBlank()
-                                        TextButton(enabled = available && (selectedAlertId == null || selectedAlert != null),
-                                            onClick = { choosingRecipient = false; contact(person, method) }) {
+                                    val availableMethods = buildList {
+                                        if (person.phone.isNotBlank() && ContactMethod.SMS in person.selectedMethods()) add(ContactMethod.SMS)
+                                        if (person.email.isNotBlank() && ContactMethod.EMAIL in person.selectedMethods()) add(ContactMethod.EMAIL)
+                                    }
+                                    availableMethods.forEach { method ->
+                                        TextButton(enabled = !busy && (selectedAlertId == null || selectedAlert != null),
+                                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                                containerColor = if (selected && selectedChannel == method) Color(0xFFD1FAE5) else Color.Transparent,
+                                                contentColor = Color(0xFF0F172A)),
+                                            onClick = { selectedContactId = person.designeeId; selectedChannel = method }) {
                                             Icon(when (method) {
                                                 ContactMethod.SMS -> Icons.Outlined.Sms
                                                 ContactMethod.EMAIL -> Icons.Outlined.Email
@@ -404,36 +423,15 @@ fun CommunicationScreen(onBack: () -> Unit, alertId: Long? = null) {
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { choosingRecipient = false }) { Text("Cancel") } })
-    }
-
-    pendingContact?.let { request ->
-        val (person, how, linkedAlertId) = request
-        val linked = alerts.firstOrNull { it.alertId == linkedAlertId }
-        val destination = if (how == ContactMethod.EMAIL) person.email else person.phone
-        if (!featureUnavailable) AlertDialog(onDismissRequest = { if (!busy) pendingContact = null },
-            title = { Text(if (how == ContactMethod.CALL) "Call preview" else "Message preview") },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(person.name, style = MaterialTheme.typography.titleMedium)
-                    Text(destination)
-                    Text(linked?.let { updatePreview(it, readingsById[it.vitalId], preferences) }
-                        ?: if (linkedAlertId != null) "This alert is no longer active. Choose another update." else "Hi, this is a check-in from PHMS.")
-                    Text("This preview does not send a message or place a call.")
-                }
+            confirmButton = {
+                Button(enabled = !busy && recipient != null && validChannel != null && (selectedAlertId == null || selectedAlert != null),
+                    onClick = {
+                        showFeatureUnavailable()
+                    }) { Text("Continue") }
             },
-            confirmButton = { TextButton(enabled = !busy && (linkedAlertId == null || linked != null),
-                onClick = { featureUnavailable = true }) { Text("Continue") } },
-            dismissButton = { TextButton(enabled = !busy, onClick = { pendingContact = null }) { Text("Cancel") } })
+            dismissButton = { OutlinedButton(enabled = !busy, onClick = { choosingRecipient = false }) { Text("Cancel") } })
     }
 
-    if (featureUnavailable) {
-        AlertDialog(onDismissRequest = { featureUnavailable = false },
-            containerColor = Color.White,
-            title = { Text("Feature under development") },
-            text = { Text("This feature is currently being updated and is not available yet. Please check back later.") },
-            confirmButton = { TextButton(onClick = { featureUnavailable = false }) { Text("OK") } })
-    }
 
     deleting?.let { d ->
         AlertDialog(
@@ -511,13 +509,13 @@ private fun ShareChoice(title: String, selected: Boolean, modifier: Modifier, wa
         .then(Modifier.semantics { this.selected = selected }),
         color = Color.White, shape = RoundedCornerShape(12.dp),
         border = BorderStroke(if (selected) 2.dp else 1.dp,
-            if (selected) Color(0xFFFFDF48) else Color(0xFFE8E1D8))) {
+            if (selected) Color(0xFF065F46) else Color(0xFFE8E1D8))) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             if (warning) Icon(Icons.Outlined.WarningAmber, "Health alert", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-            else if (icon != null) Icon(icon, null, tint = Color(0xFF111827), modifier = Modifier.size(20.dp))
-            else if (selected) Icon(Icons.Outlined.CheckCircle, null, tint = Color(0xFF111827), modifier = Modifier.size(20.dp))
-            Text(title, style = MaterialTheme.typography.labelLarge, color = Color(0xFF111827))
+            else if (icon != null) Icon(icon, null, tint = Color(0xFF0F172A), modifier = Modifier.size(20.dp))
+            else if (selected) Icon(Icons.Outlined.CheckCircle, null, tint = Color(0xFF0F172A), modifier = Modifier.size(20.dp))
+            Text(title, style = MaterialTheme.typography.labelLarge, color = Color(0xFF0F172A))
         }
     }
 }

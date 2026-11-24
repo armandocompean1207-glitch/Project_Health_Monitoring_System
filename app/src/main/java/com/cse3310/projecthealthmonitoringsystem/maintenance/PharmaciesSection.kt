@@ -1,9 +1,7 @@
 package com.cse3310.projecthealthmonitoringsystem.maintenance
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LocalPharmacy
 import androidx.compose.material3.*
@@ -24,7 +22,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun CareContactIcon(icon: ImageVector) {
-    Surface(shape = CircleShape, color = Color(0xFFFFDF48), contentColor = Color(0xFF111827)) {
+    Surface(shape = CircleShape, color = Color(0xFF065F46), contentColor = Color.White) {
         Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(24.dp)) }
     }
 }
@@ -40,7 +38,12 @@ internal fun PharmaciesSection() {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(onClick = { editing = Pharmacy(userId = userId, name = "") }) { Text("Add pharmacy") }
+        if (editing == null) Button(onClick = { editing = Pharmacy(userId = userId, name = "") }) { Text("Add pharmacy") }
+        editing?.let { pharmacy ->
+            key(pharmacy.pharmacyId) {
+                PharmacyEditor(pharmacy, onDismiss = { editing = null }) { editing = null }
+            }
+        }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (pharmacies.isEmpty()) PhmsEmptyStateCard("Add your first pharmacy",
             "Keep your pharmacy details handy for prescriptions and refills.", Icons.Outlined.LocalPharmacy)
@@ -56,7 +59,7 @@ internal fun PharmaciesSection() {
                     if (p.phone.isNotBlank()) Text(p.phone)
                     if (p.pharmacistName.isNotBlank()) Text("Pharmacist: ${p.pharmacistName}")
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        PhmsTextButton(enabled = !busy, onClick = { editing = p }) { Text("Edit") }
+                        PhmsTextButton(enabled = !busy && editing == null, onClick = { editing = p }) { Text("Edit") }
                         if (!p.isPreferred) PhmsTextButton(enabled = !busy, onClick = {
                             busy = true; error = null
                             scope.launch {
@@ -72,9 +75,7 @@ internal fun PharmaciesSection() {
             }
         }
     }
-    editing?.let { pharmacy ->
-        PharmacyEditor(pharmacy, onDismiss = { editing = null }) { editing = null }
-    }
+
     deleting?.let { p ->
         AlertDialog(onDismissRequest = { if (!busy) deleting = null }, title = { Text("Delete ${p.name}?") },
             text = { Text("Medication records and dose history will be kept. Their pharmacy link will be cleared.") },
@@ -99,9 +100,11 @@ internal fun PharmacyEditor(original: Pharmacy, onDismiss: () -> Unit, onSaved: 
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val dismiss = rememberGuardedDismiss(p != original, busy, onDismiss)
-    AlertDialog(onDismissRequest = dismiss, title = { Text(if (p.pharmacyId == 0L) "Add pharmacy" else "Edit pharmacy") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    androidx.activity.compose.BackHandler { dismiss() }
+    PhmsCard(Modifier.fillMaxWidth().imePadding(), colors = CardDefaults.outlinedCardColors(containerColor = Color.White)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PhmsScreenHeader(if (p.pharmacyId == 0L) "Add pharmacy" else "Edit pharmacy",
+                icon = Icons.Outlined.LocalPharmacy, onBack = dismiss)
                 PhmsTextField(p.name, { p = p.copy(name = it) }, label = { Text("Pharmacy name") }, enabled = !busy, singleLine = true)
                 PhmsTextField(p.street, { p = p.copy(street = it) }, label = { Text("Street address (optional)") }, enabled = !busy, singleLine = true)
                 PhmsTextField(p.city, { p = p.copy(city = it) }, label = { Text("City (optional)") }, enabled = !busy, singleLine = true)
@@ -114,9 +117,8 @@ internal fun PharmacyEditor(original: Pharmacy, onDismiss: () -> Unit, onSaved: 
                     Text("Set as preferred pharmacy")
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            }
-        },
-        confirmButton = { PhmsTextButton(enabled = !busy, onClick = {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(enabled = !busy, onClick = {
             error = ProviderPharmacyValidation.pharmacy(p)
             if (error == null) {
                 busy = true
@@ -132,6 +134,9 @@ internal fun PharmacyEditor(original: Pharmacy, onDismiss: () -> Unit, onSaved: 
                     finally { busy = false }
                 }
             }
-        }) { Text(if (busy) "Saving…" else "Save") } },
-        dismissButton = { PhmsTextButton(enabled = !busy, onClick = dismiss) { Text("Cancel") } })
+        }) { Text(if (busy) "Saving…" else "Save") }
+        PhmsOutlinedButton(enabled = !busy, onClick = dismiss) { Text("Cancel") }
+            }
+        }
+    }
 }

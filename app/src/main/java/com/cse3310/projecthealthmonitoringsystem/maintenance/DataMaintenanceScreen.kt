@@ -15,6 +15,7 @@ import com.cse3310.projecthealthmonitoringsystem.ui.components.*
 import kotlinx.coroutines.CancellationException
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,20 +50,25 @@ import com.cse3310.projecthealthmonitoringsystem.data.entity.DoctorVisit
 import com.cse3310.projecthealthmonitoringsystem.monitoring.CurrentUser
 import com.cse3310.projecthealthmonitoringsystem.monitoring.phms
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
 
 private enum class Section(val label: String, val one: String, val readOnly: Boolean = false) {
     DOCTORS("My providers", "provider"),
     PHARMACIES("My pharmacies", "pharmacy"),
     VISITS("Appointments", "appointment"),
     CHECKUPS("Annual checkups", "checkup date"),
-    SPECIALTIES("Specialties", "specialty", readOnly = true),
+
     VITALS("Vital ranges", "vital type", readOnly = true),
     CONFLICTS("Medication interactions", "interaction", readOnly = true)
 }
 
 /** What the delete dialog is about to remove. */
 private data class PendingDelete(val title: String, val confirmLabel: String = "Delete",
-    val successMessage: String = "Removed successfully.", val action: suspend () -> Boolean)
+    val successMessage: String = "Removed successfully.", val appointmentId: Long? = null,
+    val action: suspend () -> Boolean)
 
 @Composable
 fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {}, initialAppointments: Boolean = false, initialCheckups: Boolean = false, initialVisitId: Long? = null) {
@@ -79,6 +85,12 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
     var visitFilter by rememberSaveable { mutableStateOf("Upcoming") }
     var annualVisit by remember { mutableStateOf(false) }
     var appointmentReminderMask by remember { mutableStateOf(10) }
+    var manageAppointments by remember { mutableStateOf(false) }
+    var selectedVisitId by remember { mutableStateOf<Long?>(null) }
+    var viewingVisitId by remember { mutableStateOf<Long?>(null) }
+    val clock by produceState(System.currentTimeMillis()) {
+        while (true) { delay(1_000); value = System.currentTimeMillis() }
+    }
 
     val doctors by remember(userId) { repo.observeDoctors(userId) }.collectAsState(initial = emptyList())
     val visits by remember(userId) { repo.observeDoctorVisits(userId) }.collectAsState(initial = emptyList())
@@ -104,6 +116,13 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
 
     fun open(id: Long = 0L, a: String = "", b: String = "", c: String = "", d: String = "", e: String = "", f: String = "", pick: Long? = null) {
         if (section.readOnly) return
+        if (section == Section.VISITS && id > 0) {
+            val visit = visits.firstOrNull { it.visit.visitId == id }?.visit
+            if (visit == null) { message = "This appointment is no longer available."; return }
+            if (visit.visitAt < System.currentTimeMillis()) {
+                formOpen = false; viewingVisitId = id; return
+            }
+        }
         editId = id; f1 = a; f2 = b; f3 = c; f4 = d; f5 = e; f6 = f; pickedId = pick
         formError = null
         formDateValid = true
@@ -144,7 +163,13 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
                     val doctorId = pickedId ?: run { formError = "Pick a provider."; return@launch }
                     val at = parseVisitTime(f1) ?: run { formError = "Choose an appointment date and time."; return@launch }
                     val reason = if (annualVisit && !isAnnualCheckup(f2)) "Annual checkup" + f2.trim().takeIf { it.isNotEmpty() }?.let { " · $it" }.orEmpty() else f2.trim()
-                    val original = visits.firstOrNull { it.visit.visitId == editId }?.visit
+                    val original = if (editId > 0) repo.observeDoctorVisits(userId).first()
+                        .firstOrNull { it.visit.visitId == editId }?.visit else null
+                    if (editId > 0 && (original == null || original.visitAt < System.currentTimeMillis())) {
+                        formOpen = false; viewingVisitId = editId
+                        message = "Past appointments are read-only."
+                        return@launch
+                    }
                     val visit = DoctorVisit(editId, userId, doctorId, at, reason, f3.trim(),
                         reminderMask = appointmentReminderMask, cancelled = original?.cancelled ?: false)
                     val ok = if (editId == 0L) repo.addDoctorVisit(userId, visit) != null else repo.editDoctorVisit(userId, visit)
@@ -156,7 +181,7 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
                         ?: run { formError = "Your profile could not be loaded."; return@launch }
                     done(app.authRepository.updateProfile(userId, latest.copy(annualCheckupAt = at)), "Could not save the checkup date.")
                 }
-                Section.SPECIALTIES, Section.VITALS, Section.CONFLICTS -> Unit
+                Section.VITALS, Section.CONFLICTS -> Unit
             }
             } catch (e: CancellationException) { throw e
             } catch (_: Exception) { formError = "Couldn't save. Check the fields and try again."
@@ -164,10 +189,43 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
         }
     }
     val dismissEditor = rememberGuardedDismiss(formOpen, busy) { formOpen = false }
+    fun requestAppointmentDeletion(id: Long) {
+        if (busy || !manageAppointments || selectedVisitId != id) return
+        val record = visits.firstOrNull { it.visit.visitId == id } ?: return
+        pendingDelete = PendingDelete(
+            listOf("Delete appointment with ${record.doctorName}?", visitDisplay(record.visit.visitAt),
+                record.visit.reason, record.visit.notes).filter { it.isNotBlank() }.joinToString("\n"),
+            successMessage = "Appointment deleted.", appointmentId = id
+        ) {
+            val deleted = repo.deleteDoctorVisit(userId, id)
+            if (deleted) {
+                selectedVisitId = null
+                if (viewingVisitId == id) viewingVisitId = null
+            }
+            deleted
+        }
+    }
+    LaunchedEffect(section) { manageAppointments = false; selectedVisitId = null }
+    LaunchedEffect(clock, formOpen, editId, visits) {
+        if (formOpen && section == Section.VISITS && editId > 0 &&
+            visits.firstOrNull { it.visit.visitId == editId }?.visit?.visitAt?.let { it < clock } == true) {
+            formOpen = false; viewingVisitId = editId
+        }
+    }
 
-    fun LazyListScope.row(title: String, lines: List<String>, onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null, onCancel: (() -> Unit)? = null) {
-        item {
-            OutlinedCard(Modifier.fillMaxWidth(), colors = androidx.compose.material3.CardDefaults.outlinedCardColors(
+    fun LazyListScope.row(title: String, lines: List<String>, onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null, onCancel: (() -> Unit)? = null, recordId: Long? = null) {
+        item(key = recordId?.let { "appointment-${section.name}-$it" }) {
+            val selectedRecord = recordId != null && manageAppointments && selectedVisitId == recordId
+            OutlinedCard(Modifier.fillMaxWidth().then(
+                if (recordId != null) Modifier.selectable(
+                    selected = selectedRecord,
+                    enabled = manageAppointments && !busy && !formOpen,
+                    role = androidx.compose.ui.semantics.Role.RadioButton,
+                    onClick = { selectedVisitId = recordId })
+                else Modifier),
+                border = androidx.compose.foundation.BorderStroke(if (selectedRecord) 2.dp else 1.dp,
+                    if (selectedRecord) androidx.compose.ui.graphics.Color(0xFF065F46) else MaterialTheme.colorScheme.outline),
+                colors = androidx.compose.material3.CardDefaults.outlinedCardColors(
                 containerColor = if (section.readOnly) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -179,11 +237,18 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
                             else -> PhmsIcons.Providers
                         })
                         Text(title, style = MaterialTheme.typography.titleMedium,
-                            color = if (section.readOnly) androidx.compose.ui.graphics.Color(0xFF111827) else MaterialTheme.colorScheme.onSurface)
+                            color = if (section.readOnly) androidx.compose.ui.graphics.Color(0xFF0F172A) else MaterialTheme.colorScheme.onSurface)
                     }
                     lines.filter { it.isNotBlank() }.forEach { Text(it, style = MaterialTheme.typography.bodyMedium,
-                        color = if (section.readOnly) androidx.compose.ui.graphics.Color(0xFF111827) else MaterialTheme.colorScheme.onSurface) }
-                    if (!section.readOnly && (onEdit != null || onDelete != null || onCancel != null)) androidx.compose.foundation.layout.FlowRow {
+                        color = if (section.readOnly) androidx.compose.ui.graphics.Color(0xFF0F172A) else MaterialTheme.colorScheme.onSurface) }
+                    if (recordId != null) {
+                        if (selectedRecord && !formOpen) androidx.compose.foundation.layout.FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(enabled = !busy, onClick = { viewingVisitId = recordId }) { Text("View") }
+                            onEdit?.let { edit -> OutlinedButton(enabled = !busy, onClick = edit) { Text("Edit") } }
+                            onDelete?.let { delete -> OutlinedButton(enabled = !busy, onClick = delete) { Text("Delete") } }
+                        }
+                    } else if (!section.readOnly && (onEdit != null || onDelete != null || onCancel != null)) androidx.compose.foundation.layout.FlowRow {
                         onEdit?.let { edit -> TextButton(enabled = !busy, onClick = edit) { Text("Edit") } }
                         onDelete?.let { delete -> TextButton(enabled = !busy, onClick = delete) { Text("Delete") } }
                         onCancel?.let { cancel -> TextButton(enabled = !busy, onClick = cancel) { Text("Cancel appointment") } }
@@ -204,7 +269,7 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
                 onBack = { if (formOpen) dismissEditor() else if (!busy) onBack() })
             if (section.readOnly) {
                 Text("Reference information · Read only", style = MaterialTheme.typography.bodySmall,
-                    color = androidx.compose.ui.graphics.Color(0xFF111827))
+                    color = androidx.compose.ui.graphics.Color(0xFF0F172A))
             }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             message?.let { Text(it, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 8.dp)) }
@@ -278,7 +343,7 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
                                 Text("Next due date is stored in your profile. Record completed checkups as appointments.", style = MaterialTheme.typography.bodyMedium)
                                 VisitTimeField(f1, onValidityChange = { formDateValid = it }) { f1 = it }
                             }
-                            Section.SPECIALTIES, Section.VITALS, Section.CONFLICTS -> Unit
+                            Section.VITALS, Section.CONFLICTS -> Unit
                         }
                         formError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -312,6 +377,10 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
             }
             Section.VISITS -> {
                 item {
+                    if (!formOpen) OutlinedButton(enabled = !busy, onClick = {
+                        manageAppointments = !manageAppointments; selectedVisitId = null
+                    }) { Text(if (manageAppointments) "Done" else "Manage") }
+                    if (manageAppointments) Text("Select an appointment to manage.", style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (initialVisitId == null) listOf("Upcoming", "Past", "All").forEach { value ->
                             FilterChip(selected = visitFilter == value, onClick = { visitFilter = value }, label = { Text(value) })
@@ -319,7 +388,7 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
                     }
                     Text(if (initialVisitId != null) "Appointment details" else "Saved locally; adding a visit does not book it with your provider.", style = MaterialTheme.typography.bodySmall)
                 }
-                val now = System.currentTimeMillis()
+                val now = clock
                 val filtered = visits.filter { if (initialVisitId != null) it.visit.visitId == initialVisitId else visitFilter == "All" ||
                     if (visitFilter == "Past") it.visit.visitAt < now else !it.visit.cancelled && it.visit.visitAt >= now }
                     .let { if (visitFilter == "Upcoming") it.sortedBy { v -> v.visit.visitAt } else it }
@@ -333,20 +402,19 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
                         v.doctorName,
                         listOf(visitDisplay(v.visit.visitAt), if (v.visit.cancelled) "Cancelled" else if (v.visit.visitAt < now) "Past appointment" else "Upcoming appointment",
                             v.visit.reason, v.visit.notes, "Reminders: " + appointmentReminderSummary(v.visit)),
-                        onEdit = { open(v.visit.visitId, visitInput(v.visit.visitAt), v.visit.reason, v.visit.notes, pick = v.visit.doctorId) },
-                        onDelete = {
-                            pendingDelete = PendingDelete("Delete this visit with ${v.doctorName}?") { repo.deleteDoctorVisit(userId, v.visit.visitId) }
-                        },
-                        onCancel = if (!v.visit.cancelled && v.visit.visitAt >= now) ({
-                            pendingDelete = PendingDelete("Cancel this appointment with ${v.doctorName}? The record will stay in history and reminders will stop.",
-                                confirmLabel = "Cancel appointment", successMessage = "Appointment cancelled.") {
-                                repo.cancelDoctorVisit(userId, v.visit.visitId)
-                            }
-                        }) else null
+                        onEdit = if (v.visit.visitAt >= now) ({ open(v.visit.visitId, visitInput(v.visit.visitAt), v.visit.reason, v.visit.notes, pick = v.visit.doctorId) }) else null,
+                        onDelete = { requestAppointmentDeletion(v.visit.visitId) },
+                        recordId = v.visit.visitId
                     )
                 }
             }
             Section.CHECKUPS -> {
+                item {
+                    if (!formOpen) OutlinedButton(enabled = !busy, onClick = {
+                        manageAppointments = !manageAppointments; selectedVisitId = null
+                    }) { Text(if (manageAppointments) "Done" else "Manage") }
+                    if (manageAppointments) Text("Select an appointment to manage.", style = MaterialTheme.typography.bodySmall)
+                }
                 val current = profile
                 item {
                     OutlinedCard(Modifier.fillMaxWidth()) {
@@ -381,19 +449,14 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
                 }
                 checkups.forEach { v ->
                     row(v.doctorName, listOf(visitDisplay(v.visit.visitAt), v.visit.reason, v.visit.notes),
-                        onEdit = {
+                        onEdit = if (v.visit.visitAt >= clock) ({
                             section = Section.VISITS
                             open(v.visit.visitId, visitInput(v.visit.visitAt), v.visit.reason, v.visit.notes, pick = v.visit.doctorId)
-                        }, onDelete = {
-                            pendingDelete = PendingDelete("Delete this recorded checkup? The profile's due date is kept separately.") {
-                                repo.deleteDoctorVisit(userId, v.visit.visitId)
-                            }
-                        })
+                        }) else null, onDelete = { requestAppointmentDeletion(v.visit.visitId) },
+                        recordId = v.visit.visitId)
                 }
             }
-            Section.SPECIALTIES -> specialties.forEach { specialty ->
-                row(specialty.name, emptyList())
-            }
+
             Section.VITALS -> vitalTypes.forEach { type ->
                 row(
                     "${type.name} (${type.unit})",
@@ -410,17 +473,34 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
         }
         if (section == Section.VITALS || section == Section.CONFLICTS) item {
             Text("Shared reference data for all accounts on this device. Sample ranges and interaction rules are for the class project, not medical advice.",
-                style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF111827))
+                style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF0F172A))
         }
+    }
+
+    viewingVisitId?.let { id ->
+        val record = visits.firstOrNull { it.visit.visitId == id }
+        AlertDialog(onDismissRequest = { viewingVisitId = null }, title = { Text(record?.doctorName ?: "Appointment unavailable") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (record == null) Text("This appointment is no longer available.")
+                    else {
+                        Text(visitDisplay(record.visit.visitAt))
+                        Text(record.visit.reason)
+                        if (record.visit.notes.isNotBlank()) Text(record.visit.notes)
+                        Text(if (record.visit.cancelled) "Cancelled" else if (record.visit.visitAt < clock) "Past appointment" else "Upcoming appointment")
+                        Text("Reminders: " + appointmentReminderSummary(record.visit))
+                    }
+                }
+            }, confirmButton = { OutlinedButton(onClick = { viewingVisitId = null }) { Text("Close") } })
     }
 
     pendingDelete?.let { p ->
         AlertDialog(
             onDismissRequest = { if (!busy) pendingDelete = null },
-            title = { Text(if (p.confirmLabel == "Delete") "Confirm removal" else "Cancel appointment?") },
+            title = { Text(if (p.appointmentId != null) "Delete appointment?" else if (p.confirmLabel == "Delete") "Confirm removal" else "Cancel appointment?") },
             text = { Text(p.title) },
             confirmButton = {
-                TextButton(enabled = !busy, onClick = {
+                val confirm: () -> Unit = {
                     if (!busy) {
                         busy = true
                         scope.launch {
@@ -431,9 +511,14 @@ fun DataMaintenanceScreen(onBack: () -> Unit, onOpenMedication: () -> Unit = {},
                             } finally { busy = false; pendingDelete = null }
                         }
                     }
-                }) { Text(p.confirmLabel) }
+                }
+                if (p.appointmentId != null) OutlinedButton(enabled = !busy, onClick = confirm) { Text(p.confirmLabel) }
+                else TextButton(enabled = !busy, onClick = confirm) { Text(p.confirmLabel) }
             },
-            dismissButton = { TextButton(enabled = !busy, onClick = { pendingDelete = null }) { Text("Cancel") } }
+            dismissButton = {
+                if (p.appointmentId != null) OutlinedButton(enabled = !busy, onClick = { pendingDelete = null }) { Text("Cancel") }
+                else TextButton(enabled = !busy, onClick = { pendingDelete = null }) { Text("Cancel") }
+            }
         )
     }
 }

@@ -72,7 +72,7 @@ object PhmsIcons {
         ImageVector.Builder("Stethoscope", 24.dp, 24.dp, 24f, 24f).apply {
             path(
                 fill = null,
-                stroke = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Black),
+                stroke = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color(0xFF0F172A)),
                 strokeLineWidth = 1.8f,
                 strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round,
                 strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round
@@ -199,6 +199,19 @@ fun PhmsEmptyStateCard(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
+    PhmsEmptyStateCard(title, description, icon, modifier, actionLabel, onAction, outlinedAction = false)
+}
+
+@Composable
+fun PhmsEmptyStateCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    outlinedAction: Boolean,
+) {
     OutlinedCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
@@ -230,7 +243,9 @@ fun PhmsEmptyStateCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (actionLabel != null && onAction != null) {
-                    TextButton(
+                    if (outlinedAction) {
+                        PhmsOutlinedButton(onClick = onAction) { Text(actionLabel) }
+                    } else TextButton(
                         onClick = onAction,
                         modifier = Modifier.padding(start = 0.dp)
                     ) {
@@ -251,14 +266,14 @@ fun PhmsIconBadge(
         modifier = modifier
             .size(40.dp)
             .clip(CircleShape)
-            .background(androidx.compose.ui.graphics.Color(0xFFFFDF48))
+            .background(androidx.compose.ui.graphics.Color(0xFF065F46))
             .padding(9.dp),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = androidx.compose.ui.graphics.Color(0xFF111827),
+            tint = androidx.compose.ui.graphics.Color.White,
             modifier = Modifier.fillMaxSize()
         )
     }

@@ -208,20 +208,20 @@ fun VitalHistoryChart(readings: List<VitalReadingItem>, type: VitalTypeOption) {
                 horizontalArrangement = if (scale.span == 0L) Arrangement.Center else Arrangement.SpaceBetween) {
                 val format = SimpleDateFormat("MM/dd", Locale.US)
                 Text(format.format(Date(points.first().timestamp)), style = MaterialTheme.typography.bodySmall,
-                    color = androidx.compose.ui.graphics.Color(0xFF111827))
+                    color = androidx.compose.ui.graphics.Color(0xFF0F172A))
                 if (scale.span > 0L) Text(format.format(Date(points.last().timestamp)), style = MaterialTheme.typography.bodySmall,
-                    color = androidx.compose.ui.graphics.Color(0xFF111827))
+                    color = androidx.compose.ui.graphics.Color(0xFF0F172A))
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 when {
                     type.secondValueLabel != null -> {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Canvas(Modifier.size(10.dp)) { drawCircle(primary) }
-                            Text("Systolic", color = androidx.compose.ui.graphics.Color(0xFF111827), style = MaterialTheme.typography.labelLarge)
+                            Text("Systolic", color = androidx.compose.ui.graphics.Color(0xFF0F172A), style = MaterialTheme.typography.labelLarge)
                         }
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Canvas(Modifier.size(10.dp)) { drawCircle(secondary) }
-                            Text("Diastolic", color = androidx.compose.ui.graphics.Color(0xFF111827), style = MaterialTheme.typography.labelLarge)
+                            Text("Diastolic", color = androidx.compose.ui.graphics.Color(0xFF0F172A), style = MaterialTheme.typography.labelLarge)
                         }
                     }
                     type.name.contains("glucose", true) -> {
@@ -230,7 +230,7 @@ fun VitalHistoryChart(readings: List<VitalReadingItem>, type: VitalTypeOption) {
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(marker, color = primary,
                                     style = MaterialTheme.typography.labelLarge)
-                                Text(label, color = androidx.compose.ui.graphics.Color(0xFF111827), style = MaterialTheme.typography.labelLarge)
+                                Text(label, color = androidx.compose.ui.graphics.Color(0xFF0F172A), style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
@@ -239,7 +239,8 @@ fun VitalHistoryChart(readings: List<VitalReadingItem>, type: VitalTypeOption) {
                 }
             }
             selected?.let { item ->
-                Text(readingText(item), style = MaterialTheme.typography.headlineMedium)
+                Text(readingText(item), style = MaterialTheme.typography.headlineMedium,
+                    color = if (item.isAbnormal) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                 Text(item.recordedAt, style = MaterialTheme.typography.bodyMedium)
                 readingComparison(readings, item)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 item.contextLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall) }

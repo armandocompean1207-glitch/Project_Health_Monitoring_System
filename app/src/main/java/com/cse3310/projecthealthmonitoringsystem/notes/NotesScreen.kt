@@ -73,8 +73,8 @@ fun NotesScreen(onBack: () -> Unit) {
     BackHandler(enabled = !editing && selectedId != null) { selectedId = null; error = null }
 
     MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
-        primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFDF48),
-        onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF111827))) {
+        primaryContainer = androidx.compose.ui.graphics.Color(0xFF065F46),
+        onPrimaryContainer = androidx.compose.ui.graphics.Color.White)) {
     if (editing) {
         key(userId, selectedId) {
             NoteEditor(selected, busy, error, onCancel = { editing = false; error = null }, onSave = ::save)
@@ -173,9 +173,9 @@ fun NotesScreen(onBack: () -> Unit) {
 @Composable
 private fun NoteCategoryIcon(category: NoteCategory) {
     androidx.compose.material3.Surface(shape = androidx.compose.foundation.shape.CircleShape,
-        color = androidx.compose.ui.graphics.Color(0xFFFFDF48)) {
+        color = androidx.compose.ui.graphics.Color(0xFF065F46)) {
         Icon(categoryIcon(category), null, Modifier.padding(4.dp).size(20.dp),
-            tint = androidx.compose.ui.graphics.Color(0xFF111827))
+            tint = androidx.compose.ui.graphics.Color.White)
     }
 }
 

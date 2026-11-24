@@ -36,8 +36,8 @@ import com.cse3310.projecthealthmonitoringsystem.validation.HealthValidation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-private val AuthYellow = Color(0xFFFFDF48)
-private val AuthBackground = Color(0xFFFCFAF8)
+private val AuthYellow = Color(0xFF065F46)
+private val AuthBackground = Color(0xFFF8FAFC)
 private val AuthInk = Color(0xFF0F172A)
 private val AuthSecondary = Color(0xFF64748B)
 private val AuthBorder = Color(0xFFF0E6E0)
@@ -178,9 +178,9 @@ private fun LoginScreen(modifier: Modifier) {
                 Button(onClick = { submit() }, enabled = !busy,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                     shape = RoundedCornerShape(50),
-                    colors = ButtonDefaults.buttonColors(containerColor = AuthYellow, contentColor = AuthInk)) {
+                    colors = ButtonDefaults.buttonColors(containerColor = AuthYellow, contentColor = Color.White)) {
                     if (busy) {
-                        CircularProgressIndicator(Modifier.size(20.dp), color = AuthInk, strokeWidth = 2.dp)
+                        CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                         Spacer(Modifier.width(8.dp))
                     }
                     Text(if (busy) "Please wait…" else if (register) "Create account" else "Sign in",
@@ -216,11 +216,11 @@ private fun LoginScreen(modifier: Modifier) {
 
 @Composable
 private fun AuthBrandingPanel() {
-    Surface(color = AuthYellow, contentColor = AuthInk, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth()) {
+    Surface(color = AuthYellow, contentColor = Color.White, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(androidx.compose.ui.res.painterResource(com.cse3310.projecthealthmonitoringsystem.R.drawable.ic_phms_brandshield),
-                null, Modifier.size(64.dp), tint = AuthInk)
+                null, Modifier.size(64.dp), tint = Color.White)
             Text("PHMS", style = MaterialTheme.typography.displayLarge.copy(
                 fontSize = 48.sp, lineHeight = 60.sp, fontWeight = FontWeight.ExtraBold),
                 textAlign = TextAlign.Center)

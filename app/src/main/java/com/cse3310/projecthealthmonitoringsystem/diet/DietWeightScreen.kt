@@ -58,7 +58,7 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val pageScroll = rememberScrollState()
-    val inlineOpen = editor in listOf("goal", "meal", "weight")
+    val inlineOpen = editor in listOf("goal", "meal", "weight", "food")
     val dismissInline = rememberGuardedDismiss(inlineOpen, busy) { editor = null }
     LaunchedEffect(editor) { if (inlineOpen) pageScroll.animateScrollTo(0) }
 
@@ -80,8 +80,8 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
         }
     }
 
-    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = androidx.compose.ui.graphics.Color(0xFF111827),
-        onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF111827), onBackground = androidx.compose.ui.graphics.Color(0xFF111827))) {
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = androidx.compose.ui.graphics.Color(0xFF0F172A),
+        onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF0F172A), onBackground = androidx.compose.ui.graphics.Color(0xFF0F172A))) {
     PhmsPage(scrollState = pageScroll) {
         PhmsScreenHeader("Diet and Weight", "Track your meals and weight in one place.", PhmsIcons.Diet, if (inlineOpen) dismissInline else onBack)
         TabRow(selectedTabIndex = tab) {
@@ -92,7 +92,7 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
             }
         }
         message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-        key(editor, mealToEdit?.dietEntryId) {
+        key(editor, mealToEdit?.dietEntryId, foodMealId, foodToEdit?.foodId) {
     if (editor == "goal") {
         NumericInlineForm("Daily calorie goal", "Calories (kcal)", busy, initialText = goal.takeIf { it > 0 }?.toString().orEmpty(), onDismiss = { editor = null }) { value, _, _ ->
             if (value > 0 && value <= Int.MAX_VALUE) {
@@ -122,6 +122,19 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
         }
     }
 
+    if (editor == "food") {
+        FoodInlineForm(foodToEdit, busy, onDismiss = { editor = null },
+            onDelete = foodToEdit?.let { food -> { perform { check(repository.deleteFood(userId, food.foodId)) } } }) { name, kcal ->
+            perform {
+                val old = foodToEdit
+                if (old == null) {
+                    checkNotNull(repository.addFood(userId, Food(userId = userId, dietEntryId = foodMealId,
+                        name = name, calories = kcal)))
+                } else check(repository.editFood(userId, old.copy(name = name, calories = kcal)))
+            }
+        }
+    }
+
         }
         if (tab == 0) {
             PhmsDateInput(day, { it?.let { time -> day = time } }, "Change day", enabled = !busy)
@@ -141,7 +154,7 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
                     } else {
                         Text("Set your own daily goal to see progress.", style = MaterialTheme.typography.bodyMedium)
                     }
-                    OutlinedButton(enabled = !busy, onClick = { editor = "goal" }, colors = ButtonDefaults.outlinedButtonColors(containerColor = androidx.compose.ui.graphics.Color.White, contentColor = androidx.compose.ui.graphics.Color(0xFF111827))) { Text(if (goal > 0) "Change calorie goal" else "Set calorie goal") }
+                    OutlinedButton(enabled = !busy, onClick = { editor = "goal" }, colors = ButtonDefaults.outlinedButtonColors(containerColor = androidx.compose.ui.graphics.Color.White, contentColor = androidx.compose.ui.graphics.Color(0xFF0F172A))) { Text(if (goal > 0) "Change calorie goal" else "Set calorie goal") }
                 }
             }
             if (editor != "meal") Button(onClick = { mealToEdit = null; editor = "meal" }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("+ Add meal") }
@@ -158,16 +171,16 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
                         Text("${meal.foods.sumOf { it.calories }} kcal", style = MaterialTheme.typography.titleMedium)
                         if (meal.entry.notes.isNotBlank()) Text(meal.entry.notes)
                         meal.foods.forEach { food ->
-                            TextButton(enabled = !busy, onClick = {
+                            FoodHistoryRow(food, enabled = !busy, onEdit = {
                                 foodToEdit = food; foodMealId = meal.entry.dietEntryId; editor = "food"
-                            }) { Text("${food.name} · ${food.calories} kcal · Edit") }
-                            Text("Protein ${number(food.proteinGrams)} g · Sugar ${number(food.sugarGrams)} g",
-                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            })
+
                         }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            TextButton(enabled = !busy, onClick = { mealToEdit = meal.entry; editor = "meal" }) { Text("Edit meal") }
-                            TextButton(enabled = !busy, onClick = { foodToEdit = null; foodMealId = meal.entry.dietEntryId; editor = "food" }) { Text("Add food") }
-                            TextButton(enabled = !busy, onClick = { deleteMeal = meal.entry }) { Text("Delete") }
+                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PhmsOutlinedButton(enabled = !busy, onClick = { mealToEdit = meal.entry; editor = "meal" }) { Text("Edit meal", maxLines = 1, softWrap = false) }
+                            PhmsOutlinedButton(enabled = !busy, onClick = { foodToEdit = null; foodMealId = meal.entry.dietEntryId; editor = "food" }) { Text("Add food", maxLines = 1, softWrap = false) }
+                            PhmsOutlinedButton(enabled = !busy, onClick = { deleteMeal = meal.entry }) { Text("Delete", maxLines = 1, softWrap = false) }
                         }
                     }
                 }
@@ -213,18 +226,7 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
         }
     }
 
-    if (editor == "food") {
-        FoodDialog(foodToEdit, busy, onDismiss = { editor = null },
-            onDelete = foodToEdit?.let { food -> { perform { check(repository.deleteFood(userId, food.foodId)) } } }) { name, kcal, protein, sugar ->
-            perform {
-                val old = foodToEdit
-                if (old == null) {
-                    checkNotNull(repository.addFood(userId, Food(userId = userId, dietEntryId = foodMealId,
-                        name = name, calories = kcal, proteinGrams = protein, sugarGrams = sugar)))
-                } else check(repository.editFood(userId, old.copy(name = name, calories = kcal, proteinGrams = protein, sugarGrams = sugar)))
-            }
-        }
-    }
+
     deleteMeal?.let { entry ->
         AlertDialog(onDismissRequest = { if (!busy) deleteMeal = null },
             title = { Text("Delete this meal?") }, text = { Text("This removes the meal and all its foods from your journal.") },
@@ -232,6 +234,24 @@ fun DietWeightScreen(onBack: () -> Unit, initialTab: Int = 0) {
             dismissButton = { TextButton(enabled = !busy, onClick = { deleteMeal = null }) { Text("Cancel") } })
     }
     }
+}
+
+@Composable
+private fun FoodHistoryRow(food: Food, enabled: Boolean, onEdit: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(food.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        Text("${food.calories} kcal", style = MaterialTheme.typography.bodyMedium)
+        PhmsOutlinedButton(enabled = enabled, onClick = onEdit) { Text("Edit", maxLines = 1, softWrap = false) }
+    }
+}
+
+@Composable
+private fun FoodEntryFields(name: String, onNameChange: (String) -> Unit,
+    calories: String, onCaloriesChange: (String) -> Unit, enabled: Boolean) {
+    OutlinedTextField(name, onNameChange, label = { Text("Food name") },
+        enabled = enabled, modifier = Modifier.fillMaxWidth())
+    NumberField(calories, onCaloriesChange, "Calories (kcal)", enabled = enabled)
 }
 
 @Composable
@@ -243,11 +263,11 @@ private fun InlineFormCard(title: String, busy: Boolean, valid: Boolean, onCance
             content()
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(enabled = !busy && valid, onClick = onSave,
-                    colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFDF48),
-                        contentColor = androidx.compose.ui.graphics.Color(0xFF111827))) { Text(if (busy) "Saving…" else "Save") }
+                    colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFF065F46),
+                        contentColor = androidx.compose.ui.graphics.Color.White)) { Text(if (busy) "Saving…" else "Save") }
                 OutlinedButton(enabled = !busy, onClick = onCancel,
                     colors = ButtonDefaults.outlinedButtonColors(containerColor = androidx.compose.ui.graphics.Color.White,
-                        contentColor = androidx.compose.ui.graphics.Color(0xFF111827))) { Text("Cancel") }
+                        contentColor = androidx.compose.ui.graphics.Color(0xFF0F172A))) { Text("Cancel") }
             }
         }
     }
@@ -308,8 +328,7 @@ private fun MealInlineForm(entry: DietEntry?, day: Long, busy: Boolean, onDismis
         PhmsDateInput(at, { it?.let { time -> at = time } }, "Meal date", minDate = 1, maxDate = 4102444799999L,
             enabled = !busy, onValidityChange = { dateValid = it })
         if (entry == null) {
-            OutlinedTextField(name, { name = it }, label = { Text("Food name") }, enabled = !busy)
-            NumberField(calories, { calories = it }, "Calories (kcal)", enabled = !busy)
+            FoodEntryFields(name, { name = it }, calories, { calories = it }, enabled = !busy)
         }
         OutlinedTextField(notes, { notes = it }, label = { Text("Notes (optional)") }, enabled = !busy)
         if (entry != null) Text("Edit foods from the meal card.")
@@ -317,31 +336,19 @@ private fun MealInlineForm(entry: DietEntry?, day: Long, busy: Boolean, onDismis
 }
 
 @Composable
-private fun FoodDialog(food: Food?, busy: Boolean, onDismiss: () -> Unit, onDelete: (() -> Unit)?,
-    onSave: (String, Int, Double, Double) -> Unit) {
+private fun FoodInlineForm(food: Food?, busy: Boolean, onDismiss: () -> Unit, onDelete: (() -> Unit)?,
+    onSave: (String, Int) -> Unit) {
     var name by rememberSaveable { mutableStateOf(food?.name ?: "") }
     var kcal by rememberSaveable { mutableStateOf(food?.calories?.toString() ?: "") }
-    var protein by rememberSaveable { mutableStateOf(food?.proteinGrams?.toString() ?: "0") }
-    var sugar by rememberSaveable { mutableStateOf(food?.sugarGrams?.toString() ?: "0") }
     var confirmFoodDelete by remember { mutableStateOf(false) }
-    fun valid(value: String) = value.toDoubleOrNull()?.let { HealthValidation.grams(it) == null } == true
     val dismiss = rememberGuardedDismiss(true, busy, onDismiss)
-    AlertDialog(onDismissRequest = dismiss, title = { Text(if (food == null) "Add food" else "Edit food") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Food name") })
-                NumberField(kcal, { kcal = it }, "Calories (kcal)")
-                NumberField(protein, { protein = it }, "Protein (g)")
-                NumberField(sugar, { sugar = it }, "Sugar (g)")
-            }
-        }, confirmButton = { TextButton(enabled = !busy && name.isNotBlank() && kcal.toIntOrNull()?.let { HealthValidation.calories(it) == null } == true &&
-            valid(protein) && valid(sugar), onClick = { onSave(name.trim(), kcal.toInt(), protein.toDouble(), sugar.toDouble()) }) { Text(if (busy) "Saving…" else "Save") } },
-        dismissButton = {
-            Row {
-                if (onDelete != null) TextButton(enabled = !busy, onClick = { confirmFoodDelete = true }) { Text("Delete food") }
-                TextButton(enabled = !busy, onClick = dismiss) { Text("Cancel") }
-            }
-        })
+    androidx.activity.compose.BackHandler { dismiss() }
+    val canSave = name.isNotBlank() && kcal.toIntOrNull()?.let { HealthValidation.calories(it) == null } == true
+    InlineFormCard(if (food == null) "Add food" else "Edit food", busy, canSave, dismiss,
+        { onSave(name.trim(), kcal.toInt()) }) {
+        FoodEntryFields(name, { name = it }, kcal, { kcal = it }, enabled = !busy)
+        if (onDelete != null) PhmsOutlinedButton(enabled = !busy, onClick = { confirmFoodDelete = true }) { Text("Delete food") }
+    }
     if (confirmFoodDelete && onDelete != null) {
         AlertDialog(onDismissRequest = { if (!busy) confirmFoodDelete = false },
             title = { Text("Delete this food?") }, text = { Text("This removes the food from your meal.") },

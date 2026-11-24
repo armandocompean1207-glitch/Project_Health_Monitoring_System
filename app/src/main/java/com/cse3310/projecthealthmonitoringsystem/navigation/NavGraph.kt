@@ -334,9 +334,9 @@ private fun MoreScreen(
     )
 
     MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(
-        primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFDF48),
-        onPrimaryContainer = androidx.compose.ui.graphics.Color.Black,
-        onSurfaceVariant = androidx.compose.ui.graphics.Color.Black)) {
+        primaryContainer = androidx.compose.ui.graphics.Color(0xFF065F46),
+        onPrimaryContainer = androidx.compose.ui.graphics.Color.White,
+        onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF0F172A))) {
     PhmsPage(modifier = modifier) {
         com.cse3310.projecthealthmonitoringsystem.ui.components.PhmsScreenHeader(
             "More", "Your care, records and personal details.", PhmsIcons.More)

@@ -78,21 +78,21 @@ fun PhmsDateInput(value: Long?, onDateChange: (Long?) -> Unit, label: String,
             onDateChange(selected)
         }
     }, modifier = modifier.fillMaxWidth(), enabled = enabled, singleLine = true,
-        label = { Text(label, color = if (useStandardFieldStyle) Color.Unspecified else Color(0xFF111827)) },
-        placeholder = { Text("MM/DD/YYYY", color = if (useStandardFieldStyle) Color.Unspecified else Color(0xFF111827)) },
+        label = { Text(label, color = if (useStandardFieldStyle) Color.Unspecified else Color(0xFF0F172A)) },
+        placeholder = { Text("MM/DD/YYYY", color = if (useStandardFieldStyle) Color.Unspecified else Color(0xFF0F172A)) },
         colors = if (useStandardFieldStyle) OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline,
             focusedLabelColor = MaterialTheme.colorScheme.onSurface, unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
             cursorColor = MaterialTheme.colorScheme.onSurface)
         else OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.White, unfocusedContainerColor = Color.White,
-            errorContainerColor = Color.White, focusedTextColor = Color(0xFF111827), unfocusedTextColor = Color(0xFF111827),
-            focusedBorderColor = Color(0xFFFFDF48), unfocusedBorderColor = Color(0xFFE8E1D8)),
+            errorContainerColor = Color.White, focusedTextColor = Color(0xFF0F172A), unfocusedTextColor = Color(0xFF0F172A),
+            focusedBorderColor = Color(0xFF065F46), unfocusedBorderColor = Color(0xFFE8E1D8)),
         isError = showError,
         supportingText = { if (showError) Text(
             if (parsed == null) "Enter a valid date as MM/DD/YYYY." else "Choose a date within the allowed range.") },
         trailingIcon = {
             IconButton(enabled = enabled, onClick = { focus.clearFocus(); keyboard?.hide(); choosing = true }) {
-                Icon(Icons.Outlined.CalendarMonth, "Choose $label", tint = Color(0xFF111827))
+                Icon(Icons.Outlined.CalendarMonth, "Choose $label", tint = Color(0xFF0F172A))
             }
         })
     val initialDate = parsed ?: value ?: System.currentTimeMillis()
@@ -110,7 +110,7 @@ fun PhmsDateInput(value: Long?, onDateChange: (Long?) -> Unit, label: String,
 }
 
 @Composable
-private fun PhmsCalendarPicker(initial: Long, minDate: Long?, maxDate: Long?, onDismiss: () -> Unit,
+internal fun PhmsCalendarPicker(initial: Long, minDate: Long?, maxDate: Long?, onDismiss: () -> Unit,
     onConfirm: (Long) -> Unit) {
     val initialCalendar = remember { Calendar.getInstance().apply { timeInMillis = initial } }
     var year by remember { mutableIntStateOf(initialCalendar.get(Calendar.YEAR).coerceIn(1, 9999)) }
@@ -121,8 +121,8 @@ private fun PhmsCalendarPicker(initial: Long, minDate: Long?, maxDate: Long?, on
     var jump by remember { mutableStateOf(year.toString()) }
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    val yellow = Color(0xFFFFDF48)
-    val ink = Color(0xFF111827)
+    val yellow = Color(0xFF065F46)
+    val ink = Color(0xFF0F172A)
     fun monthEnd(y: Int, m: Int): Long = Calendar.getInstance().apply {
         clear(); set(y, m, 1); set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
     }.timeInMillis
@@ -135,7 +135,7 @@ private fun PhmsCalendarPicker(initial: Long, minDate: Long?, maxDate: Long?, on
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = ink, onSurfaceVariant = ink,
-            onBackground = ink, surface = Color.White, primary = yellow, onPrimary = ink)) {
+            onBackground = ink, surface = Color.White, primary = yellow, onPrimary = Color.White)) {
         Surface(Modifier.padding(12.dp).fillMaxWidth().widthIn(max = 520.dp),
             shape = RoundedCornerShape(20.dp), color = Color.White, contentColor = ink,
             border = BorderStroke(1.dp, Color(0xFFE8E1D8))) {
@@ -169,7 +169,7 @@ private fun PhmsCalendarPicker(initial: Long, minDate: Long?, maxDate: Long?, on
                                         color = if (year == option) yellow else Color.White,
                                         border = BorderStroke(1.dp, Color(0xFFE8E1D8))) {
                                         Box(Modifier.padding(8.dp), contentAlignment = Alignment.Center) {
-                                            Text(if (option == 0) "—" else option.toString(), color = if (available) ink else ink.copy(alpha = .35f))
+                                            Text(if (option == 0) "—" else option.toString(), color = if (available) { if (year == option) Color.White else ink } else ink.copy(alpha = .35f))
                                         }
                                     }
                                 }
@@ -184,7 +184,7 @@ private fun PhmsCalendarPicker(initial: Long, minDate: Long?, maxDate: Long?, on
                                     color = if (month == option) yellow else Color.White,
                                     border = BorderStroke(1.dp, Color(0xFFE8E1D8))) {
                                     Box(Modifier.padding(8.dp), contentAlignment = Alignment.Center) {
-                                        Text(SimpleDateFormat("MMM", Locale.US).format(Date(calendarDate(year, option, 1)!!)), color = ink)
+                                        Text(SimpleDateFormat("MMM", Locale.US).format(Date(calendarDate(year, option, 1)!!)), color = if (month == option) Color.White else ink)
                                     }
                                 }
                             }
@@ -208,7 +208,7 @@ private fun PhmsCalendarPicker(initial: Long, minDate: Long?, maxDate: Long?, on
                                             val allowed = dateAllowed(time, minDate, maxDate)
                                             Surface(onClick = { day = option }, enabled = allowed, modifier = Modifier.size(cell),
                                                 shape = RoundedCornerShape(24.dp), color = if (day == option) yellow else Color.White) {
-                                                Box(contentAlignment = Alignment.Center) { Text(option.toString(), color = if (allowed) ink else ink.copy(alpha = .35f)) }
+                                                Box(contentAlignment = Alignment.Center) { Text(option.toString(), color = if (allowed) { if (day == option) Color.White else ink } else ink.copy(alpha = .35f)) }
                                             }
                                         }
                                     }
@@ -222,7 +222,7 @@ private fun PhmsCalendarPicker(initial: Long, minDate: Long?, maxDate: Long?, on
                     val selected = calendarDate(year, month, day)
                     Button(enabled = selected != null && dateAllowed(selected, minDate, maxDate),
                         onClick = { selected?.let(onConfirm) },
-                        colors = ButtonDefaults.buttonColors(containerColor = yellow, contentColor = ink)) { Text("Use date") }
+                        colors = ButtonDefaults.buttonColors(containerColor = yellow, contentColor = Color.White)) { Text("Use date") }
                 }
             }
         }

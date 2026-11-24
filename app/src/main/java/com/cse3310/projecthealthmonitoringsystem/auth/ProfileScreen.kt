@@ -77,7 +77,9 @@ fun ProfileScreen(onBack: () -> Unit, onDoctors: () -> Unit, onAppointments: () 
         }
         PhmsActionCard("My providers", "View and manage your care team.", PhmsIcons.Providers, onDoctors)
         PhmsActionCard("Appointments", "View your saved provider visits.", PhmsIcons.Appointments, onAppointments)
-        OutlinedButton(onClick = { confirmLogout = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Log out") }
+        androidx.compose.material3.OutlinedButton(onClick = { confirmLogout = true }, enabled = !busy, modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(containerColor = androidx.compose.ui.graphics.Color(0xFF065F46),
+                contentColor = androidx.compose.ui.graphics.Color.White)) { Text("Log out") }
     }
     if (confirmLogout) AlertDialog(onDismissRequest = { if (!busy) confirmLogout = false },
         title = { Text("Log out?") }, text = { Text("Your records stay saved. Reminders for this account pause until you sign in again.") },
@@ -146,7 +148,7 @@ private fun ProfileEditor(profile: Profile, busy: Boolean, onCancel: () -> Unit,
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Button(enabled = !busy, modifier = Modifier.weight(1.3f).fillMaxHeight().heightIn(min = 48.dp),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFDF48), contentColor = androidx.compose.ui.graphics.Color(0xFF111827)),
+            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFF065F46), contentColor = androidx.compose.ui.graphics.Color.White),
             onClick = {
             attempted = true
             if (valid) onSave(profile.copy(name = name.trim(), gender = gender.trim(), dateOfBirth = birth,
@@ -160,7 +162,7 @@ private fun ProfileEditor(profile: Profile, busy: Boolean, onCancel: () -> Unit,
             modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
             shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.outlinedButtonColors(containerColor = androidx.compose.ui.graphics.Color.White, contentColor = androidx.compose.ui.graphics.Color(0xFF111827)),
+            colors = ButtonDefaults.outlinedButtonColors(containerColor = androidx.compose.ui.graphics.Color.White, contentColor = androidx.compose.ui.graphics.Color(0xFF0F172A)),
             border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFE8E1D8))) { Text("Cancel") }
         }
     }
